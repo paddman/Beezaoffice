@@ -31,7 +31,7 @@ class RuntimeConfig:
 
 
 def _headers(config: RuntimeConfig) -> dict[str, str]:
-    headers = {"Content-Type": "application/json", "User-Agent": "BeezaOffice/0.2"}
+    headers = {"Content-Type": "application/json", "User-Agent": "BeezaOffice/0.3"}
     if config.auth_token:
         headers["Authorization"] = f"Bearer {config.auth_token}"
     return headers
@@ -85,6 +85,14 @@ async def _json_request(
     return body, latency_ms
 
 
+def _result_output(body: dict[str, Any]) -> Any:
+    for key in ("output", "summary", "result", "final_response", "message"):
+        value = body.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
 async def probe_runtime(config: RuntimeConfig) -> dict[str, Any]:
     if not config.configured:
         return {
@@ -97,52 +105,26 @@ async def probe_runtime(config: RuntimeConfig) -> dict[str, Any]:
     if platform == "openclaw":
         try:
             body, latency = await _json_request(
-                "GET",
-                f"{config.url}/healthz",
-                config=config,
-                timeout=10,
+                "GET", f"{config.url}/healthz", config=config, timeout=10
             )
         except RuntimeAdapterError:
             body, latency = await _json_request(
-                "GET",
-                f"{config.url}/v1/models",
-                config=config,
-                timeout=10,
+                "GET", f"{config.url}/v1/models", config=config, timeout=10
             )
-    elif platform == "cherryagent":
+    elif platform in {"cherryagent", "hermes"}:
         body, latency = await _json_request(
-            "GET",
-            f"{config.url}/health",
-            config=config,
-            timeout=10,
-        )
-    elif platform == "hermes":
-        body, latency = await _json_request(
-            "GET",
-            f"{config.url}/health",
-            config=config,
-            timeout=10,
+            "GET", f"{config.url}/health", config=config, timeout=10
         )
     elif platform == "thclaws":
         body, latency = await _json_request(
-            "GET",
-            f"{config.url}/v1/models",
-            config=config,
-            timeout=10,
+            "GET", f"{config.url}/v1/models", config=config, timeout=10
         )
     else:
         body, latency = await _json_request(
-            "GET",
-            f"{config.url}/health",
-            config=config,
-            timeout=10,
+            "GET", f"{config.url}/health", config=config, timeout=10
         )
 
-    return {
-        "status": "ONLINE",
-        "latency_ms": latency,
-        "detail": body,
-    }
+    return {"status": "ONLINE", "latency_ms": latency, "detail": body}
 
 
 def _mission_prompt(payload: dict[str, Any]) -> str:
@@ -159,10 +141,7 @@ def _mission_prompt(payload: dict[str, Any]) -> str:
     )
 
 
-async def dispatch_runtime(
-    config: RuntimeConfig,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
+async def dispatch_runtime(config: RuntimeConfig, payload: dict[str, Any]) -> dict[str, Any]:
     if not config.configured:
         raise RuntimeAdapterError(
             f"{config.platform} is not configured. Set its base URL in .env."
@@ -198,9 +177,7 @@ async def dispatch_runtime(
         choices = body.get("choices") or []
         output = ""
         if choices and isinstance(choices[0], dict):
-            output = str(
-                (choices[0].get("message") or {}).get("content") or ""
-            )
+            output = str((choices[0].get("message") or {}).get("content") or "")
         return {
             "remote_id": body.get("id"),
             "status": "COMPLETED",
@@ -211,32 +188,20 @@ async def dispatch_runtime(
 
     if platform == "cherryagent":
         roles = payload.get("roles") or []
-        tags = list(
-            dict.fromkeys(
-                [
-                    *(payload.get("tags") or []),
-                    "beezaoffice",
-                    payload["mission_key"],
-                ]
-            )
-        )
+        tags = list(dict.fromkeys([*(payload.get("tags") or []), "beezaoffice", payload["mission_key"]]))
         body, latency = await _json_request(
             "POST",
             f"{config.url}/orchestrator/runs",
             config=config,
             timeout=30,
-            payload={
-                "goal": prompt,
-                "preferredRoles": roles,
-                "tags": tags,
-            },
+            payload={"goal": prompt, "preferredRoles": roles, "tags": tags},
         )
         remote_id = body.get("runId") or body.get("run_id") or body.get("id")
         return {
             "remote_id": remote_id,
             "status": str(body.get("status") or "STARTED").upper(),
             "latency_ms": latency,
-            "output": body.get("summary"),
+            "output": _result_output(body),
             "raw": body,
         }
 
@@ -245,27 +210,25 @@ async def dispatch_runtime(
             payload.get("instructions")
             or (
                 "You are a specialist in a BeezaOffice mission. Use your tools, "
-                "preserve evidence, respect approvals, and clearly report completion "
-                "or blockers."
+                "preserve evidence, respect approvals, and clearly report completion or blockers."
             )
         )
-        request_body: dict[str, Any] = {
-            "input": prompt,
-            "session_id": f"beeza-{payload['mission_key']}",
-            "instructions": instructions,
-        }
         body, latency = await _json_request(
             "POST",
             f"{config.url}/v1/runs",
             config=config,
             timeout=30,
-            payload=request_body,
+            payload={
+                "input": prompt,
+                "session_id": f"beeza-{payload['mission_key']}",
+                "instructions": instructions,
+            },
         )
         return {
             "remote_id": body.get("run_id") or body.get("id"),
             "status": str(body.get("status") or "STARTED").upper(),
             "latency_ms": latency,
-            "output": body.get("output"),
+            "output": _result_output(body),
             "raw": body,
         }
 
@@ -298,6 +261,65 @@ async def dispatch_runtime(
             "raw": body,
         }
 
-    raise RuntimeAdapterError(
-        f"Unsupported runtime platform: {config.platform}"
+    raise RuntimeAdapterError(f"Unsupported runtime platform: {config.platform}")
+
+
+async def get_runtime_status(config: RuntimeConfig, remote_id: str) -> dict[str, Any]:
+    """Poll a long-running remote run using the runtime's public control API."""
+    platform = config.platform.lower()
+    if platform == "cherryagent":
+        body, latency = await _json_request(
+            "GET", f"{config.url}/orchestrator/runs/{remote_id}", config=config, timeout=30
+        )
+    elif platform == "hermes":
+        body, latency = await _json_request(
+            "GET", f"{config.url}/v1/runs/{remote_id}", config=config, timeout=30
+        )
+    else:
+        raise RuntimeAdapterError(
+            f"{config.platform} dispatches are synchronous in Phase 2 and cannot be polled."
+        )
+
+    return {
+        "status": str(body.get("status") or "UNKNOWN"),
+        "latency_ms": latency,
+        "output": _result_output(body),
+        "last_event": body.get("last_event") or body.get("event"),
+        "raw": body,
+    }
+
+
+async def stop_runtime_run(config: RuntimeConfig, remote_id: str) -> dict[str, Any]:
+    """Request a safe stop. Hermes exposes this in its stable Runs API."""
+    if config.platform.lower() != "hermes":
+        raise RuntimeAdapterError(
+            f"Stop control is not available for {config.platform} in Phase 2."
+        )
+    body, latency = await _json_request(
+        "POST",
+        f"{config.url}/v1/runs/{remote_id}/stop",
+        config=config,
+        payload={},
+        timeout=30,
     )
+    return {"status": str(body.get("status") or "STOPPING"), "latency_ms": latency, "raw": body}
+
+
+async def approve_runtime_run(
+    config: RuntimeConfig,
+    remote_id: str,
+    choice: str,
+) -> dict[str, Any]:
+    """Resolve a Hermes tool approval without exposing its token to the browser."""
+    if config.platform.lower() != "hermes":
+        raise RuntimeAdapterError(
+            f"Approval control is not available for {config.platform} in Phase 2."
+        )
+    body, latency = await _json_request(
+        "POST",
+        f"{config.url}/v1/runs/{remote_id}/approval",
+        config=config,
+        payload={"choice": choice},
+        timeout=30,
+    )
+    return {"status": str(body.get("status") or "RUNNING"), "latency_ms": latency, "raw": body}
