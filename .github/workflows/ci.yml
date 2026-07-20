@@ -14,8 +14,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python source
-        run: python -m py_compile app/main.py app/runtime_adapters.py
+        run: python -m py_compile app/main.py app/phase2_app.py app/runtime_adapters.py
       - name: Check browser JavaScript
         run: node --check app/static/app.js
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
+      - name: Smoke-test Phase 2 runtime control
+        run: |
+          docker run --rm beezaoffice:test python -c "from phase2_app import normalize_remote_status, app; assert app.version == '0.3.0'; assert normalize_remote_status('started') == 'RUNNING'; assert normalize_remote_status('approval_required') == 'WAITING_APPROVAL'; assert normalize_remote_status('succeeded') == 'COMPLETED'"
