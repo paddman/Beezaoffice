@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import Depends, HTTPException
@@ -23,7 +24,7 @@ from main import (
 from phase6_app import require_governance
 from registry_models import RegisteredAgent
 from scheduler_models import decision_view
-from scheduler_service import route_task
+from scheduler_service import SCHEDULER_INTERVAL, route_task
 
 app.version = "0.9.0"
 
@@ -35,23 +36,60 @@ _original_scheduler_tick = scheduler_service.scheduler_tick
 async def governed_scheduler_tick() -> dict[str, int]:
     with SessionLocal() as db:
         if not governance_service.execution_enabled(db):
-            redis_client.hset(
-                "beezaoffice:scheduler-worker",
-                mapping={
-                    "status": "paused",
-                    "last_tick_at": utcnow().isoformat(),
-                    "last_routed": "0",
-                    "last_waiting": "0",
-                    "last_blocked": "0",
-                    "last_error": "Execution kill switch is active",
-                },
-            )
             return {"routed": 0, "waiting": 0, "blocked": 0}
     return await _original_scheduler_tick()
 
 
+async def governed_scheduler_worker() -> None:
+    while True:
+        try:
+            with SessionLocal() as db:
+                enabled = governance_service.execution_enabled(db)
+            if not enabled:
+                redis_client.hset(
+                    "beezaoffice:scheduler-worker",
+                    mapping={
+                        "status": "paused",
+                        "last_tick_at": utcnow().isoformat(),
+                        "last_routed": "0",
+                        "last_waiting": "0",
+                        "last_blocked": "0",
+                        "interval_seconds": str(SCHEDULER_INTERVAL),
+                        "last_error": "Execution kill switch is active",
+                    },
+                )
+            else:
+                result = await _original_scheduler_tick()
+                redis_client.hset(
+                    "beezaoffice:scheduler-worker",
+                    mapping={
+                        "status": "online",
+                        "last_tick_at": utcnow().isoformat(),
+                        "last_routed": str(result["routed"]),
+                        "last_waiting": str(result["waiting"]),
+                        "last_blocked": str(result["blocked"]),
+                        "interval_seconds": str(SCHEDULER_INTERVAL),
+                        "last_error": "",
+                    },
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # pragma: no cover
+            redis_client.hset(
+                "beezaoffice:scheduler-worker",
+                mapping={
+                    "status": "degraded",
+                    "last_tick_at": utcnow().isoformat(),
+                    "last_error": str(exc)[:500],
+                },
+            )
+        await asyncio.sleep(SCHEDULER_INTERVAL)
+
+
 scheduler_service.scheduler_tick = governed_scheduler_tick
+scheduler_service.scheduler_worker = governed_scheduler_worker
 phase8_app.scheduler_tick = governed_scheduler_tick
+phase8_app.scheduler_worker = governed_scheduler_worker
 
 
 def remove_route(path: str, method: str) -> None:
