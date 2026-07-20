@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from uuid import uuid4
 
 from fastapi import Depends, HTTPException
 from sqlalchemy import select
@@ -11,6 +12,7 @@ import governance_service
 import phase8_app  # noqa: F401 — install Phase 1–8 routes and workers
 import scheduler_service
 from collaboration_models import CollaborationTask, TERMINAL_TASK_STATUSES, task_view
+from governance_models import GovernanceIdentity, RoleBinding
 from main import (
     Agent,
     RuntimeConnector,
@@ -31,6 +33,56 @@ app.version = "0.9.0"
 # Smart-task creation, manual rerouting and scheduler ticks are execution actions.
 governance_service.EXECUTION_ACTIONS.add("scheduler:route")
 _original_scheduler_tick = scheduler_service.scheduler_tick
+
+
+@app.on_event("startup")
+def seed_scheduler_service_identity() -> None:
+    with SessionLocal() as db:
+        now = utcnow()
+        identity_key = "service:scheduler"
+        identity = db.scalar(
+            select(GovernanceIdentity).where(
+                GovernanceIdentity.identity_key == identity_key
+            )
+        )
+        if identity is None:
+            db.add(
+                GovernanceIdentity(
+                    identity_key=identity_key,
+                    tenant_key="tenant:beeza",
+                    identity_type="SERVICE",
+                    display_name="Beeza Intelligent Scheduler",
+                    department_key="dept:platform",
+                    status="ACTIVE",
+                    clearance="RESTRICTED",
+                    daily_budget_usd=1000.0,
+                    monthly_budget_usd=30000.0,
+                    attributes={"seeded": True, "purpose": "agent and runtime routing"},
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        binding = db.scalar(
+            select(RoleBinding).where(
+                RoleBinding.identity_key == identity_key,
+                RoleBinding.role_key == "role:service",
+                RoleBinding.scope_type == "GLOBAL",
+                RoleBinding.scope_key == "*",
+            )
+        )
+        if binding is None:
+            db.add(
+                RoleBinding(
+                    binding_key=f"BIND-{uuid4().hex[:14].upper()}",
+                    identity_key=identity_key,
+                    role_key="role:service",
+                    scope_type="GLOBAL",
+                    scope_key="*",
+                    created_by="system:phase8",
+                    created_at=now,
+                )
+            )
+        db.commit()
 
 
 async def governed_scheduler_tick() -> dict[str, int]:
