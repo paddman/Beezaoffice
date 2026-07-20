@@ -14,12 +14,13 @@
 }
 
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 html, body { margin: 0; min-height: 100%; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); background: radial-gradient(circle at 70% -20%, #dff4ff 0, transparent 32%), var(--bg); }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 
 .app-shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
-.sidebar { position: sticky; top: 0; height: 100vh; padding: 24px 18px; border-right: 1px solid var(--line); background: rgba(255,255,255,.86); backdrop-filter: blur(18px); display: flex; flex-direction: column; gap: 28px; }
+.sidebar { position: sticky; top: 0; height: 100vh; padding: 24px 18px; border-right: 1px solid var(--line); background: rgba(255,255,255,.86); backdrop-filter: blur(18px); display: flex; flex-direction: column; gap: 28px; z-index: 10; }
 .brand { display: flex; gap: 12px; align-items: center; }
 .brand-mark { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; font-weight: 900; color: white; background: linear-gradient(145deg, var(--blue), var(--cyan)); box-shadow: 0 10px 24px rgba(18,104,255,.28); }
 .brand strong, .brand span { display: block; }
@@ -101,12 +102,38 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -.02em; }
 .attention-item.critical { border-left: 3px solid var(--red); }
 .attention-item.warning { border-left: 3px solid var(--amber); }
 
+.organization-map-panel { margin-top: 16px; scroll-margin-top: 20px; overflow: hidden; }
+.organization-map-body { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(220px, .65fr); min-height: 420px; }
+.organization-map-visual { position: relative; min-height: 420px; overflow: hidden; border-right: 1px solid var(--line); background: radial-gradient(circle at 50% 50%, rgba(22,216,255,.18), transparent 48%), linear-gradient(145deg, #f9fcff, #eaf4ff); }
+.organization-map-visual::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 60%, rgba(8,38,94,.08)); }
+.organization-map-visual img { display: block; width: 100%; height: 100%; min-height: 420px; object-fit: cover; object-position: center; filter: saturate(1.08) contrast(1.02); transform: scale(1.015); }
+.map-live-badge { position: absolute; left: 18px; bottom: 18px; z-index: 2; padding: 10px 13px; border: 1px solid rgba(255,255,255,.9); border-radius: 999px; background: rgba(255,255,255,.9); box-shadow: 0 12px 30px rgba(18,104,255,.18); backdrop-filter: blur(14px); }
+.map-summary { padding: 16px; display: grid; align-content: stretch; gap: 10px; background: linear-gradient(180deg, #fbfdff, #f2f8ff); }
+.map-summary div { padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.9); }
+.map-summary span, .map-summary strong, .map-summary small { display: block; }
+.map-summary span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.map-summary strong { margin: 6px 0 3px; font-size: 18px; letter-spacing: -.02em; }
+.map-summary small { color: #7890ae; font-size: 10px; line-height: 1.4; }
+
 .workforce-panel { margin-top: 16px; }
 .legend { display: flex; gap: 12px; color: var(--muted); font-size: 11px; }
 .agent-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; padding: 14px; }
-.agent-card { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(160deg, #fff, #f5faff); }
-.agent-card header { display: flex; align-items: center; gap: 9px; }
-.avatar { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; color: white; font-weight: 900; background: linear-gradient(145deg, var(--blue), var(--cyan)); }
+.agent-card { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(160deg, #fff, #f5faff); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.agent-card:hover { transform: translateY(-2px); border-color: #b8d5ff; box-shadow: 0 14px 30px rgba(18,104,255,.11); }
+.agent-card header { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 14px; border: 1px solid #cfe0f6; background-image: url("/static/assets/agents-sprite.webp"); background-size: 400% 300%; background-repeat: no-repeat; background-color: #edf6ff; box-shadow: 0 8px 20px rgba(18,104,255,.12); }
+.avatar-aiden { background-position: 0% 0%; }
+.avatar-mira { background-position: 33.333% 0%; }
+.avatar-leon { background-position: 66.667% 0%; }
+.avatar-irene { background-position: 100% 0%; }
+.avatar-rei { background-position: 0% 50%; }
+.avatar-luna { background-position: 33.333% 50%; }
+.avatar-claire { background-position: 66.667% 50%; }
+.avatar-selene { background-position: 100% 50%; }
+.avatar-kai { background-position: 0% 100%; }
+.avatar-aria { background-position: 33.333% 100%; }
+.avatar-noah { background-position: 66.667% 100%; }
+.avatar-yuna { background-position: 100% 100%; }
 .agent-card strong, .agent-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-card small { color: var(--muted); margin-top: 2px; font-size: 10px; }
 .agent-status { margin-top: 10px; display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
@@ -128,6 +155,9 @@ textarea { min-height: 110px; resize: vertical; }
 @media (max-width: 1200px) {
   .grid-main { grid-template-columns: 1fr 1.35fr; }
   .attention-panel { grid-column: 1 / -1; }
+  .organization-map-body { grid-template-columns: 1fr; }
+  .organization-map-visual { border-right: 0; border-bottom: 1px solid var(--line); }
+  .map-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .agent-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -142,6 +172,16 @@ textarea { min-height: 110px; resize: vertical; }
   .top-actions { flex-wrap: wrap; justify-content: flex-end; }
   .grid-main { grid-template-columns: 1fr; }
   .attention-panel { grid-column: auto; }
+  .organization-map-visual, .organization-map-visual img { min-height: 300px; }
+  .map-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agent-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .topbar { display: grid; }
+  .top-actions { justify-content: flex-start; }
+  .legend { display: none; }
+  .room-meta, .map-summary { grid-template-columns: 1fr; }
+  .agent-grid { grid-template-columns: 1fr; }
 }
