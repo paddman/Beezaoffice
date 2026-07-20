@@ -14,6 +14,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python source
-        run: python -m py_compile app/main.py
+        run: python -m py_compile app/main.py app/runtime_adapters.py
+      - name: Check browser JavaScript
+        run: node --check app/static/app.js
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
