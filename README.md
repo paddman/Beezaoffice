@@ -7,7 +7,6 @@ BeezaOffice is an operations-first command center where agents receive missions,
 ## Current MVP
 
 - Command Center dashboard and live organization map
-- 12 founding agents with visual identities
 - Mission queue, collaboration timeline and approval surfaces
 - PostgreSQL and Redis state
 - Docker Compose deployment
@@ -35,7 +34,17 @@ BeezaOffice is an operations-first command center where agents receive missions,
   - Per-identity daily and monthly budgets
   - Emergency runtime execution kill switch
   - SHA-256 hash-chained audit ledger
-  - Governance checks at both HTTP and internal runtime-dispatch boundaries
+  - Governance checks at HTTP and internal runtime-dispatch boundaries
+- **Phase 7 agent registry and organization graph:**
+  - Governed workforce directory designed for 1,000 registered agents
+  - Department and manager reporting lines
+  - Agent lifecycle, availability and heartbeat state
+  - Preferred runtime and model
+  - Concurrency, workload and available capacity
+  - Reliability and run history
+  - Skills, capabilities, allowed tools and data clearance
+  - Organization graph, skill matrix and temporary delegation
+  - Agent creation, activation, suspension and workload reconciliation
 
 BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and local approval policies.
 
@@ -56,6 +65,8 @@ Open:
 - Collaboration worker: `http://localhost:8080/api/collaboration/worker`
 - Meeting worker: `http://localhost:8080/api/meeting-worker`
 - Governance context: `http://localhost:8080/api/governance/context`
+- Agent registry stats: `http://localhost:8080/api/registry/stats`
+- Organization graph: `http://localhost:8080/api/registry/organization`
 
 ## Core configuration
 
@@ -109,7 +120,7 @@ The Command Center Governance panel sets these headers automatically.
 | `service:meeting` | Meeting scheduler |
 | `runtime:openclaw`, `runtime:cherryagent`, `runtime:hermes`, `runtime:thclaws` | Runtime principals |
 
-The 12 founding BeezaOffice agents are also seeded as agent identities.
+The 12 founding BeezaOffice agents are also seeded as Governance identities and Phase 7 registry profiles.
 
 ## Governance behavior
 
@@ -127,6 +138,9 @@ task:review
 meeting:create
 meeting:start
 meeting:decide
+registry:write
+registry:heartbeat
+registry:delegate
 approval:decide
 governance:kill-switch
 ```
@@ -161,7 +175,7 @@ Disabling runtime execution blocks:
 - Meeting start, control and decision execution
 - Internal meeting and collaboration worker dispatches
 
-Read-only monitoring and governance recovery remain available.
+Read-only monitoring, registry search and governance recovery remain available.
 
 ### Budget enforcement
 
@@ -180,7 +194,74 @@ Every governed mutation records:
 
 The audit verification endpoint recomputes the chain and reports the first broken record.
 
-## Phase 6 API
+## Agent Registry
+
+Each Phase 7 registry profile carries:
+
+```text
+Agent key and Governance identity
+Display name and role
+Department and manager
+Status and availability
+Preferred runtime and model
+Maximum concurrency and live workload
+Reliability and run counters
+Skills and capabilities
+Allowed tools and data clearance
+Version and owner
+Heartbeat and profile metadata
+```
+
+Registry status:
+
+```text
+ACTIVE
+SUSPENDED
+RETIRED
+```
+
+Availability:
+
+```text
+AVAILABLE
+BUSY
+WAITING
+OFFLINE
+MAINTENANCE
+```
+
+The registry does not start one process per profile. It records the logical workforce and capacity while the runtime pool executes only active work.
+
+### Registry permissions
+
+```text
+registry:read
+registry:write
+registry:heartbeat
+registry:delegate
+```
+
+Agent heartbeat is limited to the agent's own identity unless the caller also has `registry:write`.
+
+### Registry API
+
+```text
+GET   /api/registry/stats
+GET   /api/registry/agents
+POST  /api/registry/agents
+GET   /api/registry/agents/{agent_key}
+PATCH /api/registry/agents/{agent_key}
+POST  /api/registry/agents/{agent_key}/heartbeat
+GET   /api/registry/organization
+GET   /api/registry/skills
+GET   /api/registry/delegations
+POST  /api/registry/delegations
+POST  /api/registry/reconcile
+```
+
+Workload reconciliation maps active Collaboration Bus tasks onto matching agent identities and updates utilization and availability.
+
+## Governance API
 
 ```text
 GET  /api/governance/context
@@ -226,6 +307,13 @@ See `docs/RUNTIME-INTEGRATIONS.md` for adapter-specific setup and security bound
 ## Architecture
 
 ```text
+Agent Registry and Organization Graph
+        ├─ identity, role, manager and department
+        ├─ skill and capability matrix
+        ├─ runtime preference
+        ├─ capacity and reliability
+        └─ delegation
+                ↓
 Human / Agent / Service Identity
         ↓ RBAC + clearance + budget + policy
 Governance Middleware
@@ -259,4 +347,4 @@ Runtime Events → Evidence → Review → Decision
 10. Enterprise Deployment
 11. Scale to 1,000 registered agents
 
-See `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/RUNTIME-INTEGRATIONS.md`, `docs/PHASE-3-EVENT-STREAM.md`, `docs/PHASE-4-COLLABORATION-BUS.md`, `docs/PHASE-5-MEETING-MANAGER.md` and `docs/PHASE-6-GOVERNANCE-IDENTITY.md`.
+See `docs/PHASE-6-GOVERNANCE.md` and `docs/PHASE-7-AGENT-REGISTRY.md` for the current control-plane architecture.
