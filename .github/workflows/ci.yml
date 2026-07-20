@@ -29,6 +29,7 @@ jobs:
           app/meeting_service.py
           app/governance_models.py
           app/governance_service.py
+          app/governance_hardening.py
           app/runtime_adapters.py
       - name: Check browser JavaScript
         run: |
@@ -42,4 +43,4 @@ jobs:
         run: docker build -t beezaoffice:test ./app
       - name: Smoke-test Phase 6 governance
         run: |
-          docker run --rm beezaoffice:test python -c "from phase6_runtime import app; from governance_models import GovernanceIdentity, PolicyRule, ApprovalRequest, AuditRecord, SystemControl; from governance_service import permission_for_request, permission_matches; assert app.version == '0.7.0'; assert GovernanceIdentity.__tablename__ == 'governance_identities'; assert PolicyRule.__tablename__ == 'governance_policy_rules'; assert ApprovalRequest.__tablename__ == 'governance_approval_requests'; assert AuditRecord.__tablename__ == 'governance_audit_records'; assert SystemControl.__tablename__ == 'governance_system_controls'; assert permission_for_request('POST', '/api/runtimes/openclaw/dispatch') == 'runtime:dispatch'; assert permission_matches('runtime:*', 'runtime:dispatch')"
+          docker run --rm beezaoffice:test python -c "from phase6_runtime import app; from governance_models import GovernanceIdentity, PolicyRule, ApprovalRequest, AuditRecord, SystemControl; from governance_service import permission_for_request, permission_matches; from governance_hardening import scoped_role_permissions; assert app.version == '0.7.0'; assert GovernanceIdentity.__tablename__ == 'governance_identities'; assert PolicyRule.__tablename__ == 'governance_policy_rules'; assert ApprovalRequest.__tablename__ == 'governance_approval_requests'; assert AuditRecord.__tablename__ == 'governance_audit_records'; assert SystemControl.__tablename__ == 'governance_system_controls'; assert callable(scoped_role_permissions); assert permission_for_request('POST', '/api/runtimes/openclaw/dispatch') == 'runtime:dispatch'; assert permission_matches('runtime:*', 'runtime:dispatch')"
