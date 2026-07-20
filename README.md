@@ -4,7 +4,7 @@
 
 BeezaOffice is an operations-first command center where agents receive missions, join mission rooms, assign work, wait for dependencies, hand work off, follow up, request approval, verify evidence, and report results to humans.
 
-## MVP included
+## Current MVP
 
 - Command Center dashboard and live organization map
 - 12 founding agents with visual identities
@@ -18,8 +18,15 @@ BeezaOffice is an operations-first command center where agents receive missions,
   - CherryAgent orchestrator
   - Hermes Agent Runs API
   - thClaws native `/agent/run`
+- **Phase 2 runtime control**
+  - Runtime run status synchronization
+  - Five-second active-run polling in the selected war room
+  - Remote result and error capture
+  - Mission timeline updates when remote status changes
+  - Hermes safe stop
+  - Hermes human approval and denial controls
 
-BeezaOffice is the control/governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes, and approval policies.
+BeezaOffice is the command/governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes, and approval policies.
 
 ## Quick deploy
 
@@ -58,13 +65,25 @@ THCLAW_WORKSPACE_DIR=/var/thcompany/agents/beeza-worker
 
 See `docs/RUNTIME-INTEGRATIONS.md` for runtime-side setup and security boundaries.
 
+## Runtime control API
+
+```text
+POST /api/runtimes/{runtime}/dispatch
+POST /api/runtime-dispatches/{dispatch}/sync
+POST /api/runtime-dispatches/{dispatch}/stop
+POST /api/runtime-dispatches/{dispatch}/approval
+GET  /api/runtime-dispatches?mission_key=...
+```
+
+Phase 2 intentionally keeps OpenClaw and thClaws dispatches synchronous. CherryAgent and Hermes long-running runs can be polled; Hermes additionally exposes safe stop and approval controls.
+
 ## Architecture
 
 ```text
 Browser
   -> BeezaOffice FastAPI Command Center
        -> PostgreSQL (missions, runtime registry, dispatch audit)
-       -> Redis (queue, counters, presence)
+       -> Redis (queue, counters, presence, sync locks)
        -> Agent Runtime Mesh
             -> OpenClaw
             -> CherryAgent
