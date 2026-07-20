@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 import governance_service
 import phase9_app  # noqa: F401 — install Phase 1–9 routes and workers
 import evaluation_hardening  # noqa: F401 — stable hashes and replay preference enforcement
+import evaluation_startup_fix  # noqa: F401 — schema-first evaluator identity bootstrap
 from evaluation_models import EvaluationRun, ReplayRun
 from governance_models import GovernanceIdentity, RoleBinding
 from main import (
