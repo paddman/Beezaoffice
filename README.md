@@ -2,7 +2,7 @@
 
 **AI Workforce Operating System** for operating an organization of 10–1,000 AI agents.
 
-BeezaOffice is an operations-first command center where governed agents receive missions, collaborate across runtimes, hold structured meetings, record decisions, route work intelligently, preserve evidence and report verified outcomes to humans.
+BeezaOffice is an operations-first command center where governed agents receive missions, collaborate across runtimes, hold structured meetings, record decisions, route work intelligently, preserve evidence, verify results and report accountable outcomes to humans.
 
 ## Current system
 
@@ -77,6 +77,19 @@ BeezaOffice is an operations-first command center where governed agents receive 
 - Automatic failover that excludes a failed agent/runtime
 - Safe rerouting that refuses to duplicate active remote execution
 
+### Phase 9 — Evaluation, Verification and Replay
+
+- Deterministic evaluation after runtime completion
+- Acceptance-criteria coverage checks
+- Supporting evidence and execution provenance records
+- Completeness, consistency, reproducibility and risk-disclosure scores
+- PASS, WARN and FAIL verification states
+- Acceptance, human-review and replay recommendations
+- Failed auto-completions reopened for human review
+- Controlled SAME, REROUTE and FAILOVER replay modes
+- Original/replay score and component comparison
+- Verified quality signal blended into Registry reliability
+
 BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and local approval policies.
 
 ## Quick deploy
@@ -100,6 +113,7 @@ Open:
 - Agent Registry: `http://localhost:8080/api/registry/stats`
 - Scheduler: `http://localhost:8080/api/scheduler/status`
 - Runtime pool: `http://localhost:8080/api/scheduler/runtime-pool`
+- Evaluator: `http://localhost:8080/api/evaluation/status`
 
 ## Core configuration
 
@@ -126,7 +140,13 @@ BEEZA_SCHEDULER_ENABLED=true
 BEEZA_SCHEDULER_INTERVAL_SECONDS=3
 BEEZA_SCHEDULER_BATCH_SIZE=100
 BEEZA_SCHEDULER_FAILOVER_ATTEMPTS=3
+
+BEEZA_EVALUATOR_ENABLED=true
+BEEZA_EVALUATOR_INTERVAL_SECONDS=10
+BEEZA_EVALUATOR_BATCH_SIZE=100
 ```
+
+The evaluator settings have safe defaults in code, so Phase 9 operates even when an older `.env` has not yet added these optional variables.
 
 ## Governance headers
 
@@ -154,6 +174,8 @@ The Command Center sets these headers for governed browser operations.
 | `service:runtime` | Runtime service principal |
 | `service:collaboration` | Collaboration scheduler |
 | `service:meeting` | Meeting scheduler |
+| `service:scheduler` | Intelligent agent/runtime router |
+| `service:evaluator` | Evidence evaluator and replay comparator |
 | `runtime:openclaw`, `runtime:cherryagent`, `runtime:hermes`, `runtime:thclaws` | Runtime principals |
 
 The 12 founding agents are also seeded as Governance identities and Phase 7 Registry profiles.
@@ -214,6 +236,60 @@ GET   /api/scheduler/decisions
 POST  /api/scheduler/simulate
 POST  /api/missions/{mission_key}/routed-tasks
 POST  /api/scheduler/tasks/{task_key}/route
+```
+
+## Evaluation and replay
+
+Phase 9 evaluates completed work against a policy baseline:
+
+| Component | Weight |
+|---|---:|
+| Result completeness | 20% |
+| Acceptance coverage | 20% |
+| Supporting evidence | 20% |
+| Runtime provenance | 15% |
+| Status/result consistency | 10% |
+| Reproducibility | 10% |
+| Risk disclosure | 5% |
+
+Default decision thresholds:
+
+```text
+PASS  >= 78% with no hard verification error
+WARN  >= 55% without provenance/status conflict
+FAIL  below threshold or hard conflict
+```
+
+The completion summary is recorded as a claim. It does not count as supporting evidence by itself. Evidence records can represent sources, references, artifacts, commands, checks and runtime provenance.
+
+A failed automatically completed task can be moved back to `REVIEW`. A controlled replay creates a new work package linked to the original and always uses human review.
+
+### Evaluation permissions
+
+```text
+evaluation:read
+evaluation:run
+evaluation:policy:write
+replay:create
+```
+
+`replay:create` is governed as an execution action and is blocked by the emergency kill switch. Local evaluation remains available while external execution is paused.
+
+### Evaluation API
+
+```text
+GET   /api/evaluation/status
+POST  /api/evaluation/tick
+GET   /api/evaluation/policies
+PATCH /api/evaluation/policies/{policy_key}
+GET   /api/evaluation/runs
+GET   /api/evaluation/runs/{evaluation_key}
+GET   /api/evaluation/tasks/{task_key}
+POST  /api/evaluation/tasks/{task_key}
+GET   /api/evaluation/evidence
+GET   /api/evaluation/replays
+GET   /api/evaluation/replays/{replay_key}
+POST  /api/evaluation/replays
 ```
 
 ## Agent Registry API
@@ -290,7 +366,11 @@ Collaboration Bus
     ↓ governed dispatch
 OpenClaw / CherryAgent / Hermes / thClaws
     ↓ events, evidence and result
-Review / Meeting / Decision / Follow-up
+Evaluation Policy
+    ↓ completeness + acceptance + evidence + provenance
+PASS / WARN / FAIL
+    ↓
+Accept / Human Review / Controlled Replay
 ```
 
 ## Product direction
@@ -312,4 +392,5 @@ Architecture documents:
 - `docs/PHASE-6-GOVERNANCE.md`
 - `docs/PHASE-7-AGENT-REGISTRY.md`
 - `docs/PHASE-8-SCHEDULER-ROUTER.md`
+- `docs/PHASE-9-EVALUATION.md`
 - `docs/RUNTIME-INTEGRATIONS.md`
