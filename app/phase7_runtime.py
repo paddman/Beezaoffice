@@ -63,9 +63,10 @@ def hardened_reconcile_workloads(
         count = min(agent.max_concurrency * 10, count)
         availability = agent.availability
         heartbeat = aware(agent.last_heartbeat_at)
+        heartbeat_required = bool((agent.profile or {}).get("heartbeat_required", False))
         if agent.status != "ACTIVE":
             availability = "OFFLINE"
-        elif heartbeat and heartbeat < stale_cutoff:
+        elif heartbeat_required and heartbeat and heartbeat < stale_cutoff:
             availability = "OFFLINE"
         elif count > 0:
             availability = "BUSY"
