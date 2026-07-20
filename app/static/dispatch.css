@@ -1,0 +1,144 @@
+/* Phase 2 runtime run synchronization and controls. */
+.dispatch-panel {
+  margin-top: 16px;
+  scroll-margin-top: 20px;
+  overflow: hidden;
+}
+
+.dispatch-live-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.dispatch-live-state b {
+  min-width: 25px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--blue);
+  background: #e8f2ff;
+  text-align: center;
+}
+
+.dispatch-intro {
+  margin: 0;
+  padding: 14px 18px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dispatch-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  padding: 16px;
+}
+
+.dispatch-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 22px;
+  border: 1px dashed #c7ddfa;
+  border-radius: 13px;
+  color: var(--muted);
+  background: #f8fbff;
+  text-align: center;
+  font-size: 12px;
+}
+
+.dispatch-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: linear-gradient(155deg, #fff, #f6faff);
+}
+
+.dispatch-card.running,
+.dispatch-card.started,
+.dispatch-card.queued { border-color: rgba(18, 104, 255, .34); }
+.dispatch-card.waiting_approval { border-color: rgba(229, 157, 18, .48); }
+.dispatch-card.completed { border-color: rgba(22, 166, 106, .4); }
+.dispatch-card.failed,
+.dispatch-card.cancelled { border-color: rgba(225, 69, 85, .42); }
+
+.dispatch-card header,
+.dispatch-card footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.dispatch-card header strong,
+.dispatch-card header small { display: block; }
+.dispatch-card header strong { font-size: 13px; }
+.dispatch-card header small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+  overflow-wrap: anywhere;
+}
+
+.dispatch-status {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--blue);
+  background: #e8f2ff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.dispatch-status.waiting_approval { color: #9a6400; background: #fff2d7; }
+.dispatch-status.completed { color: var(--green); background: #e6f8ef; }
+.dispatch-status.failed,
+.dispatch-status.cancelled { color: var(--red); background: #ffe8ec; }
+
+.dispatch-card > p {
+  min-height: 38px;
+  margin: 13px 0;
+  color: #425c7e;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dispatch-card footer > span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.dispatch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.dispatch-actions button {
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 9px;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.danger-button {
+  color: #a33142;
+  background: #ffe8ec;
+}
+
+@media (max-width: 980px) {
+  .dispatch-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .dispatch-card header,
+  .dispatch-card footer { align-items: flex-start; flex-direction: column; }
+  .dispatch-actions { justify-content: flex-start; }
+}
