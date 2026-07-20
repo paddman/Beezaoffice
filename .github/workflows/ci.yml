@@ -14,14 +14,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python source
-        run: python -m py_compile app/main.py app/phase2_app.py app/phase3_app.py app/phase4_app.py app/collaboration_models.py app/collaboration_service.py app/runtime_adapters.py
+        run: python -m py_compile app/main.py app/phase2_app.py app/phase3_app.py app/phase4_app.py app/phase5_app.py app/collaboration_models.py app/collaboration_service.py app/meeting_models.py app/meeting_service.py app/runtime_adapters.py
       - name: Check browser JavaScript
         run: |
           node --check app/static/app.js
           node --check app/static/phase3.js
           node --check app/static/phase4.js
+          node --check app/static/phase5.js
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
-      - name: Smoke-test Phase 4 collaboration bus
+      - name: Smoke-test Phase 5 meeting manager
         run: |
-          docker run --rm beezaoffice:test python -c "from phase4_app import app; from collaboration_models import CollaborationTask, CollaborationMessage, HandoffCreate; from phase2_app import normalize_remote_status; assert app.version == '0.5.0'; assert CollaborationTask.__tablename__ == 'collaboration_tasks'; assert CollaborationMessage.__tablename__ == 'collaboration_messages'; assert HandoffCreate(title='Analyze evidence', objective='Analyze all evidence and return a verified result.', target_runtime_key='cherryagent').auto_dispatch is True; assert normalize_remote_status('approval_required') == 'WAITING_APPROVAL'"
+          docker run --rm beezaoffice:test python -c "from phase5_app import app; from meeting_models import Meeting, MeetingTurn, MeetingDecision, MeetingCreate, MeetingParticipantCreate; p=[MeetingParticipantCreate(identity='agent:Moderator', runtime_key='cherryagent', role='MODERATOR'), MeetingParticipantCreate(identity='agent:Critic', runtime_key='hermes', role='CRITIC')]; m=MeetingCreate(title='Decision room', objective='Review evidence and decide a verified implementation plan.', participants=p); assert app.version == '0.6.0'; assert Meeting.__tablename__ == 'meetings'; assert MeetingTurn.__tablename__ == 'meeting_turns'; assert MeetingDecision.__tablename__ == 'meeting_decisions'; assert m.max_rounds == 2"
