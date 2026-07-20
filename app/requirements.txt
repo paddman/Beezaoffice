@@ -4,3 +4,4 @@ sqlalchemy==2.0.41
 psycopg[binary]==3.2.9
 redis==6.2.0
 pydantic==2.11.7
+httpx==0.28.1
