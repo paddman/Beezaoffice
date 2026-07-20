@@ -25,6 +25,8 @@ jobs:
           app/phase6_runtime.py
           app/phase7_app.py
           app/phase7_runtime.py
+          app/phase8_app.py
+          app/phase8_runtime.py
           app/collaboration_models.py
           app/collaboration_service.py
           app/meeting_models.py
@@ -34,6 +36,8 @@ jobs:
           app/governance_hardening.py
           app/registry_models.py
           app/registry_service.py
+          app/scheduler_models.py
+          app/scheduler_service.py
           app/runtime_adapters.py
       - name: Check browser JavaScript
         run: |
@@ -44,8 +48,9 @@ jobs:
           node --check app/static/phase6_bootstrap.js
           node --check app/static/phase6.js
           node --check app/static/phase7.js
+          node --check app/static/phase8.js
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
-      - name: Smoke-test Phase 7 agent registry
+      - name: Smoke-test Phase 8 intelligent scheduler
         run: |
-          docker run --rm beezaoffice:test python -c "from phase7_runtime import app, hardened_reconcile_workloads; from registry_models import RegisteredAgent, AgentDelegation, AgentCreate; from registry_service import reliability_from_runs, normalize_identity; from governance_service import permission_for_request; sample=AgentCreate(agent_key='network-analyst', identity_key='agent:network-analyst', display_name='Nami', role_title='Network Analyst', department_key='dept:operations'); assert app.version == '0.8.0'; assert RegisteredAgent.__tablename__ == 'agent_registry'; assert AgentDelegation.__tablename__ == 'agent_delegations'; assert sample.max_concurrency == 1; assert callable(hardened_reconcile_workloads); assert normalize_identity('agent:Network-Analyst') == 'network-analyst'; assert reliability_from_runs(9, 1) > 0.8; assert permission_for_request('POST', '/api/registry/agents') == 'registry:write'"
+          docker run --rm beezaoffice:test python -c "from phase8_runtime import app; from collaboration_models import CollaborationTask; from scheduler_models import SchedulerPolicy, RoutingDecision, RoutedTaskCreate; from scheduler_service import estimate_cost, task_needs_route; from governance_service import permission_for_request; policy=SchedulerPolicy(policy_key='p', name='p', enabled=True, weights={}, runtime_limits={}, runtime_cost_per_1k_tokens={'hermes':0.01}, default_token_estimate=4000, minimum_score=0.3, minimum_skill_coverage=0.5, max_route_attempts=5, retry_seconds=30, settings={}, created_by='test'); task=CollaborationTask(target_identity='agent:auto', target_runtime_key='auto', context={'routing_mode':'AUTO'}); sample=RoutedTaskCreate(title='Route work', objective='Choose the best available governed agent for this task.'); assert app.version == '0.9.0'; assert SchedulerPolicy.__tablename__ == 'scheduler_policies'; assert RoutingDecision.__tablename__ == 'routing_decisions'; assert sample.routing_mode == 'AUTO'; assert estimate_cost(policy, 'hermes', 4000) == 0.04; assert task_needs_route(task); assert permission_for_request('POST', '/api/missions/INC-1/routed-tasks') == 'scheduler:route'"
