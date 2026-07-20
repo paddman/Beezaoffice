@@ -19,7 +19,7 @@
         <button class="nav-item">War Rooms</button>
         <button class="nav-item">Workforce <span id="agentCount">0</span></button>
         <button class="nav-item">Approvals <span class="alert-badge">3</span></button>
-        <button class="nav-item">Organization</button>
+        <button class="nav-item" id="organizationNav">Organization</button>
         <button class="nav-item">Governance</button>
         <button class="nav-item">Runtime</button>
       </nav>
@@ -39,7 +39,7 @@
         </div>
         <div class="top-actions">
           <span class="live-dot">Live</span>
-          <button class="secondary">Organization Map</button>
+          <button class="secondary" id="organizationMapButton">Organization Map</button>
           <button class="primary" id="newMission">+ New Mission</button>
         </div>
       </header>
@@ -90,6 +90,25 @@
             <strong>Cloud capacity review</strong>
             <p>Finance recommendation is ready for human approval.</p>
           </div>
+        </div>
+      </section>
+
+      <section class="panel organization-map-panel" id="organizationMap">
+        <div class="panel-title">
+          <div><p class="eyebrow">LIVE DIGITAL OFFICE</p><h2>Organization Map</h2></div>
+          <div class="legend"><span>● Working</span><span>◐ Waiting</span><span>○ Available</span></div>
+        </div>
+        <div class="organization-map-body">
+          <div class="organization-map-visual">
+            <img src="/static/assets/organization-map.webp" alt="BeezaOffice AI organization command center" loading="eager" />
+            <div class="map-live-badge"><span class="live-dot">Live collaboration</span></div>
+          </div>
+          <aside class="map-summary">
+            <div><span>Registered workforce</span><strong>12 / 1,000</strong><small>Founding agent roster</small></div>
+            <div><span>Active missions</span><strong id="mapMissionCount">0</strong><small>Cross-department execution</small></div>
+            <div><span>Runtime slots</span><strong>42 / 200</strong><small>Elastic worker pool</small></div>
+            <div><span>Current focus</span><strong>Incident response</strong><small>Rei → Aiden → Noah → Yuna → Mira</small></div>
+          </aside>
         </div>
       </section>
 
