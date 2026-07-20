@@ -2,49 +2,80 @@
 
 **AI Workforce Operating System** for operating an organization of 10–1,000 AI agents.
 
-BeezaOffice is an operations-first command center where agents receive missions, join mission rooms, assign work, wait for dependencies, hand work off, follow up, request approval, hold structured meetings, record decisions, verify evidence, and report results to humans.
+BeezaOffice is an operations-first command center where governed agents receive missions, collaborate across runtimes, hold structured meetings, record decisions, route work intelligently, preserve evidence and report verified outcomes to humans.
 
-## Current MVP
+## Current system
 
-- Command Center dashboard and live organization map
-- Mission queue, collaboration timeline and approval surfaces
-- PostgreSQL and Redis state
+- Command Center dashboard and digital organization map
+- PostgreSQL durable state and Redis worker coordination
 - Docker Compose deployment
-- **Agent Runtime Mesh:** OpenClaw, CherryAgent, Hermes Agent and thClaws
-- **Phase 2 runtime control:** status sync, remote result capture, Hermes safe stop and approvals
-- **Phase 3 unified event stream:** durable runtime events, server synchronization and mission SSE
-- **Phase 4 collaboration bus:**
-  - Typed cross-runtime handoffs and work contracts
-  - Task dependencies and automatic unblocking
-  - Agent/runtime mailbox with delivery state
-  - Automatic dispatch to any configured runtime
-  - Result return, human review, revision and retry
-  - Follow-up watchdog, deadline detection and escalation
-- **Phase 5 agent meeting manager:**
-  - Structured agenda and role-based participants
-  - Turn-based discussion across connected runtimes
-  - Bounded rounds to prevent repetitive loops
-  - Human decision gate and action-item generation
-- **Phase 6 governance and identity:**
-  - Tenant, department, human, agent, service and runtime identities
-  - Role-based access control with scoped role bindings
-  - Clearance checks for public, internal, confidential and restricted data
-  - Risk and cost-aware policy rules
-  - Second-person approval workflow for high-risk execution
-  - Per-identity daily and monthly budgets
-  - Emergency runtime execution kill switch
-  - SHA-256 hash-chained audit ledger
-  - Governance checks at HTTP and internal runtime-dispatch boundaries
-- **Phase 7 agent registry and organization graph:**
-  - Governed workforce directory designed for 1,000 registered agents
-  - Department and manager reporting lines
-  - Agent lifecycle, availability and heartbeat state
-  - Preferred runtime and model
-  - Concurrency, workload and available capacity
-  - Reliability and run history
-  - Skills, capabilities, allowed tools and data clearance
-  - Organization graph, skill matrix and temporary delegation
-  - Agent creation, activation, suspension and workload reconciliation
+- Runtime Mesh: OpenClaw, CherryAgent, Hermes Agent and thClaws
+- Mission queue, war room, event feed and approval surfaces
+
+### Phase 2 — Runtime control
+
+- Runtime dispatch and status synchronization
+- Remote output capture
+- Safe stop and Hermes approval controls
+
+### Phase 3 — Unified event stream
+
+- Durable runtime events
+- Server-side synchronization worker
+- Mission-scoped Server-Sent Events
+- CherryAgent task, handoff, evidence and log capture
+- Hermes status, approval, result and usage capture
+
+### Phase 4 — Collaboration Bus
+
+- Typed cross-runtime handoffs and work contracts
+- Task dependencies and automatic unblocking
+- Agent/runtime mailbox
+- Result return, human review, revision and retry
+- Follow-up watchdog, deadline detection and escalation
+
+### Phase 5 — Agent Meeting Manager
+
+- Structured agendas and participant roles
+- Turn-based discussion across connected runtimes
+- Bounded rounds that prevent repetitive loops
+- Human decision gate
+- Accepted decisions converted into Collaboration Bus action items
+
+### Phase 6 — Governance and Identity
+
+- Tenant, department, human, agent, service and runtime identities
+- Scoped RBAC
+- Data-clearance enforcement
+- Risk and cost-aware policies
+- Independent second-person approval
+- Per-identity budgets
+- Emergency execution kill switch
+- SHA-256 hash-chained audit ledger
+- Enforcement at both HTTP and internal runtime-dispatch boundaries
+
+### Phase 7 — Agent Registry and Organization Graph
+
+- Governed directory designed for 1,000 registered agents
+- Department and manager reporting lines
+- Lifecycle, availability and heartbeat state
+- Preferred runtime and model
+- Concurrency, workload and available capacity
+- Reliability and run history
+- Skills, capabilities, allowed tools and clearance
+- Organization graph, skill matrix and temporary delegation
+
+### Phase 8 — Scheduler and Intelligent Router
+
+- Smart tasks that do not require a named agent or runtime
+- Hard filtering by lifecycle, availability, clearance, capacity and cost
+- Weighted scoring by skill, reliability, capacity, runtime health, latency, cost, deadline and affinity
+- Runtime pool capacity for OpenClaw, CherryAgent, Hermes and thClaws
+- Durable explainable routing decisions
+- Route simulation before execution
+- Backpressure and retry when no route is available
+- Automatic failover that excludes a failed agent/runtime
+- Safe rerouting that refuses to duplicate active remote execution
 
 BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and local approval policies.
 
@@ -52,21 +83,23 @@ BeezaOffice remains the command and governance plane. Connected runtimes keep th
 
 ```bash
 cp .env.example .env
-# Set strong PostgreSQL and BeezaOffice credentials and configure only the runtimes in use.
+# Set strong PostgreSQL and BeezaOffice credentials.
+# Configure only the runtimes that will be used.
 docker compose -f compose.yml up -d --build
 ```
 
 Open:
 
-- BeezaOffice: `http://localhost:8080`
+- Command Center: `http://localhost:8080`
 - API health: `http://localhost:8080/api/health`
 - API docs: `http://localhost:8080/docs`
-- Runtime event worker: `http://localhost:8080/api/runtime-event-worker`
+- Runtime worker: `http://localhost:8080/api/runtime-event-worker`
 - Collaboration worker: `http://localhost:8080/api/collaboration/worker`
 - Meeting worker: `http://localhost:8080/api/meeting-worker`
-- Governance context: `http://localhost:8080/api/governance/context`
-- Agent registry stats: `http://localhost:8080/api/registry/stats`
-- Organization graph: `http://localhost:8080/api/registry/organization`
+- Governance: `http://localhost:8080/api/governance/context`
+- Agent Registry: `http://localhost:8080/api/registry/stats`
+- Scheduler: `http://localhost:8080/api/scheduler/status`
+- Runtime pool: `http://localhost:8080/api/scheduler/runtime-pool`
 
 ## Core configuration
 
@@ -88,11 +121,14 @@ BEEZA_COLLAB_MAX_FOLLOW_UPS=2
 BEEZA_MEETING_ENABLED=true
 BEEZA_MEETING_INTERVAL_SECONDS=3
 BEEZA_MEETING_TURN_TIMEOUT_SECONDS=900
+
+BEEZA_SCHEDULER_ENABLED=true
+BEEZA_SCHEDULER_INTERVAL_SECONDS=3
+BEEZA_SCHEDULER_BATCH_SIZE=100
+BEEZA_SCHEDULER_FAILOVER_ATTEMPTS=3
 ```
 
-## Governance request headers
-
-Governed browser and API mutations can include:
+## Governance headers
 
 ```text
 Authorization: Bearer <BEEZA_AUTH_TOKEN>
@@ -100,150 +136,87 @@ X-Beeza-Identity: human:owner
 X-Beeza-Risk-Level: NORMAL
 X-Beeza-Data-Classification: INTERNAL
 X-Beeza-Estimated-Cost-USD: 0
-X-Beeza-Approval-Key: APR-...        # only when an approved request is required
+X-Beeza-Approval-Key: APR-...        # when approved execution is required
 ```
 
-The Command Center Governance panel sets these headers automatically.
+The Command Center sets these headers for governed browser operations.
 
 ## Seeded identities
 
 | Identity | Purpose |
 |---|---|
-| `human:owner` | Platform owner and emergency control authority |
-| `human:executive` | Independent second approver |
-| `human:operator` | Operational mission and runtime control |
-| `human:auditor` | Read-only audit and governance review |
-| `agent:Beeza Commander` | Agent manager and mission coordinator |
-| `agent:Beeza Moderator` | Structured meeting moderator |
-| `service:runtime` | Internal runtime dispatch service |
+| `human:owner` | Platform owner and emergency authority |
+| `human:executive` | Independent approver |
+| `human:operator` | Mission and runtime operator |
+| `human:auditor` | Read-only governance reviewer |
+| `agent:Beeza Commander` | Mission coordinator |
+| `agent:Beeza Moderator` | Meeting moderator |
+| `service:runtime` | Runtime service principal |
 | `service:collaboration` | Collaboration scheduler |
 | `service:meeting` | Meeting scheduler |
 | `runtime:openclaw`, `runtime:cherryagent`, `runtime:hermes`, `runtime:thclaws` | Runtime principals |
 
-The 12 founding BeezaOffice agents are also seeded as Governance identities and Phase 7 registry profiles.
+The 12 founding agents are also seeded as Governance identities and Phase 7 Registry profiles.
 
-## Governance behavior
+## Intelligent routing
 
-### RBAC
-
-Every mutating API route is mapped to a permission such as:
+A Phase 8 smart task declares requirements rather than a fixed executor:
 
 ```text
-mission:create
-runtime:dispatch
-runtime:stop
-handoff:create
-task:control
-task:review
-meeting:create
-meeting:start
-meeting:decide
-registry:write
-registry:heartbeat
-registry:delegate
-approval:decide
-governance:kill-switch
+Objective and priority
+Required skills, capabilities and tools
+Required data clearance
+Preferred department and runtime
+Estimated tokens and maximum cost
+Strict matching or overflow policy
+Deadline
+Expected outputs and acceptance criteria
 ```
 
-Roles grant exact or wildcard permissions such as `runtime:*`.
-
-### High-risk approval
-
-A `HIGH` or `CRITICAL` runtime dispatch, task control action or meeting decision may return HTTP `428` with a pending approval request.
+The task begins as:
 
 ```text
-Requester performs high-risk action
-  → BeezaOffice returns APR-...
-  → switch to human:executive
-  → approve request
-  → switch back to requester
-  → arm approval key
-  → retry original action
-  → approval becomes USED
+agent:auto
+runtime: auto
 ```
 
-The requester cannot approve its own request.
+The balanced policy applies hard eligibility checks and then scores candidates with these default weights:
 
-### Kill switch
+| Component | Weight |
+|---|---:|
+| Skill/capability/tool coverage | 28% |
+| Reliability | 20% |
+| Agent capacity | 18% |
+| Runtime health and latency | 14% |
+| Estimated cost | 10% |
+| Deadline response | 6% |
+| Affinity | 4% |
 
-Disabling runtime execution blocks:
+Every attempt stores the full ranked candidate evidence in `routing_decisions`.
 
-- Runtime dispatch
-- Runtime stop and approval controls
-- Cross-runtime handoff execution
-- Task control actions
-- Meeting start, control and decision execution
-- Internal meeting and collaboration worker dispatches
-
-Read-only monitoring, registry search and governance recovery remain available.
-
-### Budget enforcement
-
-An estimated cost supplied through `X-Beeza-Estimated-Cost-USD` is checked against the current identity's daily and monthly limits. Successful governed mutations can create budget reservations, while actual charges can be recorded through the budget API.
-
-### Audit chain
-
-Every governed mutation records:
-
-- Identity and permission
-- Method, path and mission resource
-- Outcome and response status
-- Risk, classification and estimated cost
-- Source address and request ID
-- Previous hash and current SHA-256 record hash
-
-The audit verification endpoint recomputes the chain and reports the first broken record.
-
-## Agent Registry
-
-Each Phase 7 registry profile carries:
+### Scheduler permissions
 
 ```text
-Agent key and Governance identity
-Display name and role
-Department and manager
-Status and availability
-Preferred runtime and model
-Maximum concurrency and live workload
-Reliability and run counters
-Skills and capabilities
-Allowed tools and data clearance
-Version and owner
-Heartbeat and profile metadata
+scheduler:read
+scheduler:route
+scheduler:policy:write
 ```
 
-Registry status:
+### Scheduler API
 
 ```text
-ACTIVE
-SUSPENDED
-RETIRED
+GET   /api/scheduler/status
+POST  /api/scheduler/tick
+GET   /api/scheduler/runtime-pool
+GET   /api/scheduler/policies
+PATCH /api/scheduler/policies/{policy_key}
+GET   /api/scheduler/decisions
+POST  /api/scheduler/simulate
+POST  /api/missions/{mission_key}/routed-tasks
+POST  /api/scheduler/tasks/{task_key}/route
 ```
 
-Availability:
-
-```text
-AVAILABLE
-BUSY
-WAITING
-OFFLINE
-MAINTENANCE
-```
-
-The registry does not start one process per profile. It records the logical workforce and capacity while the runtime pool executes only active work.
-
-### Registry permissions
-
-```text
-registry:read
-registry:write
-registry:heartbeat
-registry:delegate
-```
-
-Agent heartbeat is limited to the agent's own identity unless the caller also has `registry:write`.
-
-### Registry API
+## Agent Registry API
 
 ```text
 GET   /api/registry/stats
@@ -259,7 +232,7 @@ POST  /api/registry/delegations
 POST  /api/registry/reconcile
 ```
 
-Workload reconciliation maps active Collaboration Bus tasks onto matching agent identities and updates utilization and availability.
+Logical agents are not individual permanent processes. The Registry records the workforce, while active runtime slots execute only current work.
 
 ## Governance API
 
@@ -302,35 +275,22 @@ THCLAW_MODEL=
 THCLAW_WORKSPACE_DIR=
 ```
 
-See `docs/RUNTIME-INTEGRATIONS.md` for adapter-specific setup and security boundaries.
-
 ## Architecture
 
 ```text
-Agent Registry and Organization Graph
-        ├─ identity, role, manager and department
-        ├─ skill and capability matrix
-        ├─ runtime preference
-        ├─ capacity and reliability
-        └─ delegation
-                ↓
-Human / Agent / Service Identity
-        ↓ RBAC + clearance + budget + policy
+Smart Task
+    ↓ requirements
+Agent Registry + Organization Graph
+    ↓ eligibility and scoring
+Scheduler Policy + Runtime Pool
+    ↓ explainable routing decision
 Governance Middleware
-        ├─ approval workflow
-        ├─ emergency kill switch
-        ├─ budget ledger
-        └─ hash-chained audit
-        ↓
-Mission / Meeting / Collaboration APIs
-        ↓
-Governed Runtime Dispatch Boundary
-        ├─ OpenClaw
-        ├─ CherryAgent
-        ├─ Hermes Agent
-        └─ thClaws
-        ↓
-Runtime Events → Evidence → Review → Decision
+    ↓ RBAC + clearance + budget + policy + approval
+Collaboration Bus
+    ↓ governed dispatch
+OpenClaw / CherryAgent / Hermes / thClaws
+    ↓ events, evidence and result
+Review / Meeting / Decision / Follow-up
 ```
 
 ## Product direction
@@ -347,4 +307,9 @@ Runtime Events → Evidence → Review → Decision
 10. Enterprise Deployment
 11. Scale to 1,000 registered agents
 
-See `docs/PHASE-6-GOVERNANCE.md` and `docs/PHASE-7-AGENT-REGISTRY.md` for the current control-plane architecture.
+Architecture documents:
+
+- `docs/PHASE-6-GOVERNANCE.md`
+- `docs/PHASE-7-AGENT-REGISTRY.md`
+- `docs/PHASE-8-SCHEDULER-ROUTER.md`
+- `docs/RUNTIME-INTEGRATIONS.md`
