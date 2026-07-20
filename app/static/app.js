@@ -4,6 +4,7 @@ const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
 }[char]));
+const safeClass = (value = "") => String(value).toLowerCase().replace(/[^a-z0-9_-]/g, "");
 
 async function api(path, options = {}) {
   const response = await fetch(path, options);
@@ -34,6 +35,9 @@ function renderStats(health) {
 
 function renderMissions() {
   $("#missionCount").textContent = state.missions.length;
+  const mapMissionCount = $("#mapMissionCount");
+  if (mapMissionCount) mapMissionCount.textContent = state.missions.length;
+
   $("#missionList").innerHTML = state.missions.map((mission, index) => `
     <button class="mission-card ${index === 0 ? "active" : ""}" data-mission="${escapeHtml(mission.key)}">
       <header><strong>${escapeHtml(mission.title)}</strong><span class="priority ${mission.priority}">${mission.priority}</span></header>
@@ -50,15 +54,18 @@ function renderMissions() {
 
 function renderAgents() {
   $("#agentCount").textContent = state.agents.length;
-  $("#agentGrid").innerHTML = state.agents.map((agent) => `
-    <article class="agent-card">
-      <header>
-        <div class="avatar">${escapeHtml(agent.name.slice(0, 1))}</div>
-        <div><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.role)}</small></div>
-      </header>
-      <div class="agent-status"><span>${escapeHtml(agent.department)}</span><b class="${agent.status}">${escapeHtml(agent.status)}</b></div>
-    </article>
-  `).join("");
+  $("#agentGrid").innerHTML = state.agents.map((agent) => {
+    const avatarClass = `avatar-${safeClass(agent.key)}`;
+    return `
+      <article class="agent-card" data-agent="${escapeHtml(agent.key)}">
+        <header>
+          <div class="avatar ${avatarClass}" role="img" aria-label="Portrait of ${escapeHtml(agent.name)}"></div>
+          <div><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.role)}</small></div>
+        </header>
+        <div class="agent-status"><span>${escapeHtml(agent.department)}</span><b class="${agent.status}">${escapeHtml(agent.status)}</b></div>
+      </article>
+    `;
+  }).join("");
 }
 
 async function selectMission(key) {
@@ -101,6 +108,13 @@ async function loadDashboard() {
 
 const dialog = $("#missionDialog");
 $("#newMission").addEventListener("click", () => dialog.showModal());
+
+function openOrganizationMap() {
+  $("#organizationMap")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$("#organizationMapButton")?.addEventListener("click", openOrganizationMap);
+$("#organizationNav")?.addEventListener("click", openOrganizationMap);
 
 $("#missionForm").addEventListener("submit", async (event) => {
   event.preventDefault();
