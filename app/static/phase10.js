@@ -314,9 +314,10 @@
   }
 
   async function selectTemplate(key) {
+    const currentRunKey = phase10.selectedRun?.key || null;
     phase10.selectedTemplate = await operatorApi(`/api/sop/templates/${encodeURIComponent(key)}`, {}, true);
     phase10.selectedVersionKey = phase10.selectedTemplate.versions?.find((item) => item.status === "PUBLISHED")?.key || phase10.selectedTemplate.versions?.[0]?.key || null;
-    phase10.selectedRun = null;
+    if (currentRunKey && !phase10.selectedTemplate.runs?.some((item) => item.key === currentRunKey)) phase10.selectedRun = null;
     renderTemplateList();
     renderDetail();
   }
@@ -517,7 +518,7 @@
     const message = document.querySelector("#sopRunFormMessage");
     message.textContent = "Creating governed SOP mission…";
     try {
-      phase10.selectedRun = await operatorApi(`/api/sop/templates/${encodeURIComponent(template.key)}/runs?version_key=${encodeURIComponent(version.key)}`, {
+      const createdRun = await operatorApi(`/api/sop/templates/${encodeURIComponent(template.key)}/runs?version_key=${encodeURIComponent(version.key)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -527,11 +528,13 @@
           commander: document.querySelector("#sopRunCommander").value.trim(),
         }),
       });
-      message.textContent = `${phase10.selectedRun.key} created.`;
+      const createdRunKey = createdRun.key;
+      phase10.selectedRun = createdRun;
+      message.textContent = `${createdRunKey} created.`;
       setTimeout(() => document.querySelector("#sopRunDialog").close(), 700);
       await selectTemplate(template.key);
-      await selectRun(phase10.selectedRun.key);
-      showMessage(`${phase10.selectedRun.key} queued for SOP execution.`, "success");
+      await selectRun(createdRunKey);
+      showMessage(`${createdRunKey} queued for SOP execution.`, "success");
     } catch (error) {
       message.textContent = error.message;
     }
