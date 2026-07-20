@@ -6,6 +6,7 @@
   <title>BeezaOffice — AI Workforce Command Center</title>
   <link rel="stylesheet" href="/static/styles.css" />
   <link rel="stylesheet" href="/static/runtime.css" />
+  <link rel="stylesheet" href="/static/dispatch.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -92,6 +93,15 @@
             <p>Finance recommendation is ready for human approval.</p>
           </div>
         </div>
+      </section>
+
+      <section class="panel dispatch-panel" id="missionRuntimeActivity">
+        <div class="panel-title">
+          <div><p class="eyebrow">PHASE 2 · RUNTIME CONTROL</p><h2>Mission Runtime Activity</h2></div>
+          <div class="dispatch-live-state"><span class="live-dot">Auto-sync 5s</span><b id="dispatchCount">0</b></div>
+        </div>
+        <p class="dispatch-intro">Remote run status, output, safe-stop controls and human approvals are synchronized into the selected mission war room.</p>
+        <div id="dispatchList" class="dispatch-list"></div>
       </section>
 
       <section class="panel organization-map-panel" id="organizationMap">
