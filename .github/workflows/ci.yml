@@ -24,6 +24,7 @@ jobs:
           app/phase6_app.py
           app/phase6_runtime.py
           app/phase7_app.py
+          app/phase7_runtime.py
           app/collaboration_models.py
           app/collaboration_service.py
           app/meeting_models.py
@@ -47,4 +48,4 @@ jobs:
         run: docker build -t beezaoffice:test ./app
       - name: Smoke-test Phase 7 agent registry
         run: |
-          docker run --rm beezaoffice:test python -c "from phase7_app import app; from registry_models import RegisteredAgent, AgentDelegation, AgentCreate; from registry_service import reliability_from_runs, normalize_identity; from governance_service import permission_for_request; sample=AgentCreate(agent_key='network-analyst', identity_key='agent:network-analyst', display_name='Nami', role_title='Network Analyst', department_key='dept:operations'); assert app.version == '0.8.0'; assert RegisteredAgent.__tablename__ == 'agent_registry'; assert AgentDelegation.__tablename__ == 'agent_delegations'; assert sample.max_concurrency == 1; assert normalize_identity('agent:Network-Analyst') == 'network-analyst'; assert reliability_from_runs(9, 1) > 0.8; assert permission_for_request('POST', '/api/registry/agents') == 'registry:write'"
+          docker run --rm beezaoffice:test python -c "from phase7_runtime import app, hardened_reconcile_workloads; from registry_models import RegisteredAgent, AgentDelegation, AgentCreate; from registry_service import reliability_from_runs, normalize_identity; from governance_service import permission_for_request; sample=AgentCreate(agent_key='network-analyst', identity_key='agent:network-analyst', display_name='Nami', role_title='Network Analyst', department_key='dept:operations'); assert app.version == '0.8.0'; assert RegisteredAgent.__tablename__ == 'agent_registry'; assert AgentDelegation.__tablename__ == 'agent_delegations'; assert sample.max_concurrency == 1; assert callable(hardened_reconcile_workloads); assert normalize_identity('agent:Network-Analyst') == 'network-analyst'; assert reliability_from_runs(9, 1) > 0.8; assert permission_for_request('POST', '/api/registry/agents') == 'registry:write'"
