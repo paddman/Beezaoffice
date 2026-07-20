@@ -6,11 +6,14 @@ from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import governance_service
 import phase8_app  # noqa: F401 — install Phase 1–8 routes and workers
+import scheduler_service
 from collaboration_models import CollaborationTask, TERMINAL_TASK_STATUSES, task_view
 from main import (
     Agent,
     RuntimeConnector,
+    SessionLocal,
     app,
     db_session,
     engine,
@@ -23,6 +26,32 @@ from scheduler_models import decision_view
 from scheduler_service import route_task
 
 app.version = "0.9.0"
+
+# Smart-task creation, manual rerouting and scheduler ticks are execution actions.
+governance_service.EXECUTION_ACTIONS.add("scheduler:route")
+_original_scheduler_tick = scheduler_service.scheduler_tick
+
+
+async def governed_scheduler_tick() -> dict[str, int]:
+    with SessionLocal() as db:
+        if not governance_service.execution_enabled(db):
+            redis_client.hset(
+                "beezaoffice:scheduler-worker",
+                mapping={
+                    "status": "paused",
+                    "last_tick_at": utcnow().isoformat(),
+                    "last_routed": "0",
+                    "last_waiting": "0",
+                    "last_blocked": "0",
+                    "last_error": "Execution kill switch is active",
+                },
+            )
+            return {"routed": 0, "waiting": 0, "blocked": 0}
+    return await _original_scheduler_tick()
+
+
+scheduler_service.scheduler_tick = governed_scheduler_tick
+phase8_app.scheduler_tick = governed_scheduler_tick
 
 
 def remove_route(path: str, method: str) -> None:
@@ -146,6 +175,7 @@ def scheduler_health(
         "runtime_configured": sum(bool(row.base_url) for row in runtimes),
         "scheduler": scheduler.get("status", "starting"),
         "scheduler_last_tick_at": scheduler.get("last_tick_at"),
+        "execution_enabled": governance_service.execution_enabled(db),
         "governance": "enforced",
         "phase": 8,
     }
