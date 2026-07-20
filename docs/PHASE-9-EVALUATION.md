@@ -77,7 +77,7 @@ Every run records:
 - Bounded source snapshot
 - Creation time
 
-The source hash prevents the background worker from repeatedly evaluating an unchanged result. A human can request a forced evaluation to create a new run.
+The source hash prevents the background worker from repeatedly evaluating an unchanged result. The hash excludes BeezaOffice's own `verification` metadata and volatile task timestamps, so writing an evaluation does not trigger another evaluation loop. A human can request a forced evaluation to create a new auditable run without repeatedly changing the agent reliability score.
 
 ### Evidence record
 
@@ -160,7 +160,8 @@ Permissions:
 
 ```text
 evaluation:read
-evaluation:runevaluation:policy:write
+evaluation:run
+evaluation:policy:write
 replay:create
 ```
 
@@ -196,7 +197,7 @@ FAILED
 BLOCKED
 ```
 
-It evaluates only unseen result hashes, updates replay states, writes worker status to Redis and sleeps for the configured interval.
+It evaluates only unseen stable result hashes, updates replay states, writes worker status to Redis and sleeps for the configured interval.
 
 Environment settings:
 
