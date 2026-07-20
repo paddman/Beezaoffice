@@ -82,5 +82,6 @@ async def normalize_governance_control_context(request: Request, call_next: Any)
             ]
         )
         request.scope["headers"] = headers
-        request._headers = None  # type: ignore[attr-defined]
+        if hasattr(request, "_headers"):
+            delattr(request, "_headers")
     return await call_next(request)
