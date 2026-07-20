@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from collections import Counter
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -11,8 +13,8 @@ import evaluation_service
 import phase9_app
 from collaboration_models import CollaborationTask
 from collaboration_service import collaboration_event
-from evaluation_models import EvaluationRun, EvidenceRecord
-from main import Mission, RuntimeDispatch, bounded_payload, utcnow
+from evaluation_models import EvaluationRun, EvidenceRecord, ReplayRun, policy_view
+from main import Mission, RuntimeDispatch, SessionLocal, bounded_payload, utcnow
 
 
 def clean_result(task: CollaborationTask) -> dict[str, Any]:
@@ -62,6 +64,22 @@ def evaluation_proxy(task: CollaborationTask) -> SimpleNamespace:
     )
 
 
+def dispatch_for_task(db: Session, task: CollaborationTask) -> RuntimeDispatch | None:
+    if not task.dispatch_key:
+        return None
+    return db.scalar(
+        select(RuntimeDispatch).where(
+            RuntimeDispatch.dispatch_key == task.dispatch_key
+        )
+    )
+
+
+def stable_result_hash(db: Session, task: CollaborationTask) -> str:
+    return evaluation_service.canonical_hash(
+        stable_snapshot(task, dispatch_for_task(db, task))
+    )
+
+
 def stable_evaluate_task(
     db: Session,
     task: CollaborationTask,
@@ -71,13 +89,7 @@ def stable_evaluate_task(
     note: str | None = None,
 ) -> EvaluationRun:
     policy = evaluation_service.active_policy(db)
-    dispatch = None
-    if task.dispatch_key:
-        dispatch = db.scalar(
-            select(RuntimeDispatch).where(
-                RuntimeDispatch.dispatch_key == task.dispatch_key
-            )
-        )
+    dispatch = dispatch_for_task(db, task)
     snapshot = stable_snapshot(task, dispatch)
     result_hash = evaluation_service.canonical_hash(snapshot)
     existing = db.scalar(
@@ -203,6 +215,7 @@ def stable_evaluate_task(
 
 
 _original_create_replay = evaluation_service.create_replay
+_original_update_replay_state = evaluation_service.update_replay_state
 
 
 def hardened_create_replay(
@@ -242,7 +255,146 @@ def hardened_create_replay(
     return replay
 
 
+def complete_replay_state(db: Session, replay: ReplayRun) -> bool:
+    before = (
+        replay.status,
+        json.dumps(replay.comparison or {}, sort_keys=True, default=str),
+    )
+    _original_update_replay_state(db, replay)
+    source_eval = evaluation_service.latest_evaluation(db, replay.source_task_key)
+    replay_eval = evaluation_service.latest_evaluation(db, replay.replay_task_key)
+    if replay_eval is not None:
+        source_score = source_eval.score if source_eval else None
+        replay.comparison = {
+            "source_evaluation_key": source_eval.evaluation_key if source_eval else None,
+            "replay_evaluation_key": replay_eval.evaluation_key,
+            "source_status": source_eval.status if source_eval else None,
+            "replay_status": replay_eval.status,
+            "source_score": source_score,
+            "replay_score": replay_eval.score,
+            "score_delta": round(replay_eval.score - source_score, 4)
+            if source_score is not None else None,
+            "improved": replay_eval.score > source_score
+            if source_score is not None else None,
+            "source_components": source_eval.components if source_eval else {},
+            "replay_components": replay_eval.components,
+        }
+        replay.updated_at = utcnow()
+    after = (
+        replay.status,
+        json.dumps(replay.comparison or {}, sort_keys=True, default=str),
+    )
+    return before != after
+
+
+def fair_evaluation_tick() -> dict[str, int]:
+    evaluated = passed = warned = failed = replay_updates = 0
+    with SessionLocal() as db:
+        policy = evaluation_service.seed_evaluation_policy(db)
+        scan_limit = max(1000, evaluation_service.EVALUATOR_BATCH * 20)
+        tasks = list(
+            db.scalars(
+                select(CollaborationTask)
+                .where(
+                    CollaborationTask.status.in_(
+                        evaluation_service.EVALUATABLE_STATUSES
+                    )
+                )
+                .order_by(CollaborationTask.updated_at.asc())
+                .limit(scan_limit)
+            ).all()
+        )
+        for task in tasks:
+            result_hash = stable_result_hash(db, task)
+            existing = db.scalar(
+                select(EvaluationRun.id).where(
+                    EvaluationRun.task_key == task.task_key,
+                    EvaluationRun.result_hash == result_hash,
+                    EvaluationRun.policy_key == policy.policy_key,
+                ).limit(1)
+            )
+            if existing is not None:
+                continue
+            row = stable_evaluate_task(db, task)
+            evaluated += 1
+            passed += row.status == "PASS"
+            warned += row.status == "WARN"
+            failed += row.status == "FAIL"
+            if evaluated >= evaluation_service.EVALUATOR_BATCH:
+                break
+
+        replays = list(
+            db.scalars(
+                select(ReplayRun)
+                .order_by(ReplayRun.updated_at.asc())
+                .limit(scan_limit)
+            ).all()
+        )
+        for replay in replays:
+            needs_update = (
+                replay.status not in evaluation_service.REPLAY_TERMINAL_STATUSES
+                or not replay.comparison
+            )
+            if needs_update:
+                replay_updates += complete_replay_state(db, replay)
+        db.commit()
+    return {
+        "evaluated": evaluated,
+        "passed": passed,
+        "warned": warned,
+        "failed": failed,
+        "replay_updates": replay_updates,
+    }
+
+
+def latest_evaluation_stats(db: Session) -> dict[str, Any]:
+    policy = evaluation_service.active_policy(db)
+    rows = list(
+        db.scalars(
+            select(EvaluationRun)
+            .order_by(EvaluationRun.created_at.desc())
+            .limit(10000)
+        ).all()
+    )
+    latest_by_task: dict[str, EvaluationRun] = {}
+    for row in rows:
+        latest_by_task.setdefault(row.task_key, row)
+    evaluations = list(latest_by_task.values())
+    replays = list(
+        db.scalars(
+            select(ReplayRun)
+            .order_by(ReplayRun.created_at.desc())
+            .limit(10000)
+        ).all()
+    )
+    counts = Counter(row.status for row in evaluations)
+    replay_counts = Counter(row.status for row in replays)
+    return {
+        "policy": policy_view(policy),
+        "evaluations": dict(sorted(counts.items())),
+        "replays": dict(sorted(replay_counts.items())),
+        "total_evaluations": len(evaluations),
+        "total_evaluation_runs": len(rows),
+        "total_replays": len(replays),
+        "average_score": round(
+            sum(row.score for row in evaluations) / max(1, len(evaluations)), 4
+        ),
+        "pass_rate": round(
+            counts.get("PASS", 0) / max(1, len(evaluations)), 4
+        ),
+        "open_human_review": db.query(CollaborationTask)
+        .filter(CollaborationTask.status == "REVIEW")
+        .count(),
+    }
+
+
 evaluation_service.evaluate_task = stable_evaluate_task
 phase9_app.evaluate_task = stable_evaluate_task
 evaluation_service.create_replay = hardened_create_replay
 phase9_app.create_replay = hardened_create_replay
+evaluation_service.update_replay_state = complete_replay_state
+phase9_app.update_replay_state = complete_replay_state
+evaluation_service.evaluation_tick = fair_evaluation_tick
+phase9_app.evaluation_tick = fair_evaluation_tick
+evaluation_service.evaluation_stats = latest_evaluation_stats
+phase9_app.evaluation_stats = latest_evaluation_stats
