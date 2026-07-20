@@ -14,15 +14,32 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python source
-        run: python -m py_compile app/main.py app/phase2_app.py app/phase3_app.py app/phase4_app.py app/phase5_app.py app/collaboration_models.py app/collaboration_service.py app/meeting_models.py app/meeting_service.py app/runtime_adapters.py
+        run: >-
+          python -m py_compile
+          app/main.py
+          app/phase2_app.py
+          app/phase3_app.py
+          app/phase4_app.py
+          app/phase5_app.py
+          app/phase6_app.py
+          app/phase6_runtime.py
+          app/collaboration_models.py
+          app/collaboration_service.py
+          app/meeting_models.py
+          app/meeting_service.py
+          app/governance_models.py
+          app/governance_service.py
+          app/runtime_adapters.py
       - name: Check browser JavaScript
         run: |
           node --check app/static/app.js
           node --check app/static/phase3.js
           node --check app/static/phase4.js
           node --check app/static/phase5.js
+          node --check app/static/phase6_bootstrap.js
+          node --check app/static/phase6.js
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
-      - name: Smoke-test Phase 5 meeting manager
+      - name: Smoke-test Phase 6 governance
         run: |
-          docker run --rm beezaoffice:test python -c "from phase5_app import app; from meeting_models import Meeting, MeetingTurn, MeetingDecision, MeetingCreate, MeetingParticipantCreate; p=[MeetingParticipantCreate(identity='agent:Moderator', runtime_key='cherryagent', role='MODERATOR'), MeetingParticipantCreate(identity='agent:Critic', runtime_key='hermes', role='CRITIC')]; m=MeetingCreate(title='Decision room', objective='Review evidence and decide a verified implementation plan.', participants=p); assert app.version == '0.6.0'; assert Meeting.__tablename__ == 'meetings'; assert MeetingTurn.__tablename__ == 'meeting_turns'; assert MeetingDecision.__tablename__ == 'meeting_decisions'; assert m.max_rounds == 2"
+          docker run --rm beezaoffice:test python -c "from phase6_runtime import app; from governance_models import GovernanceIdentity, PolicyRule, ApprovalRequest, AuditRecord, SystemControl; from governance_service import permission_for_request, permission_matches; assert app.version == '0.7.0'; assert GovernanceIdentity.__tablename__ == 'governance_identities'; assert PolicyRule.__tablename__ == 'governance_policy_rules'; assert ApprovalRequest.__tablename__ == 'governance_approval_requests'; assert AuditRecord.__tablename__ == 'governance_audit_records'; assert SystemControl.__tablename__ == 'governance_system_controls'; assert permission_for_request('POST', '/api/runtimes/openclaw/dispatch') == 'runtime:dispatch'; assert permission_matches('runtime:*', 'runtime:dispatch')"
