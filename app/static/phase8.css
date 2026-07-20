@@ -1,0 +1,237 @@
+/* Phase 8 — Scheduler & Intelligent Router */
+.scheduler-panel {
+  margin-top: 16px;
+  overflow: hidden;
+  scroll-margin-top: 20px;
+}
+
+.scheduler-header-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.scheduler-header-state b {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--blue);
+  background: #e8f2ff;
+  text-align: center;
+}
+
+.scheduler-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 16px;
+  border-top: 1px solid #edf2f8;
+  border-bottom: 1px solid #edf2f8;
+  background: #fbfdff;
+}
+
+.scheduler-toolbar span {
+  color: #667b95;
+  font-size: 9px;
+}
+
+.scheduler-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.scheduler-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.scheduler-stat {
+  padding: 10px 11px;
+  border: 1px solid #dce9f7;
+  border-radius: 12px;
+  background: #fff;
+}
+.scheduler-stat span,
+.scheduler-stat strong,
+.scheduler-stat small { display: block; }
+.scheduler-stat span { color: var(--muted); font-size: 8px; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
+.scheduler-stat strong { margin-top: 5px; color: #173b69; font-size: 17px; }
+.scheduler-stat small { margin-top: 4px; color: #7c8da4; font-size: 8px; }
+
+.scheduler-runtime-pool {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  padding: 14px 16px 0;
+}
+
+.scheduler-runtime-card {
+  padding: 11px;
+  border: 1px solid #dce9f7;
+  border-radius: 13px;
+  background: #fff;
+}
+.scheduler-runtime-card header { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.scheduler-runtime-card strong,
+.scheduler-runtime-card small { display: block; }
+.scheduler-runtime-card strong { font-size: 10px; }
+.scheduler-runtime-card small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.scheduler-runtime-card p { margin: 9px 0 0; color: #506984; font-size: 8px; line-height: 1.5; }
+.scheduler-runtime-card .scheduler-meter { height: 6px; margin-top: 9px; overflow: hidden; border-radius: 999px; background: #e8eef6; }
+.scheduler-runtime-card .scheduler-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #82b7ff, #2476ed); }
+
+.scheduler-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, .82fr) minmax(0, 1.25fr);
+  gap: 14px;
+  padding: 14px 16px 18px;
+}
+
+.scheduler-box {
+  min-width: 0;
+  border: 1px solid #dce9f7;
+  border-radius: 15px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.scheduler-box-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 14px;
+  border-bottom: 1px solid #edf2f8;
+}
+.scheduler-box-head strong,
+.scheduler-box-head small { display: block; }
+.scheduler-box-head strong { font-size: 12px; }
+.scheduler-box-head small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+
+.scheduler-decision-list {
+  max-height: 760px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.scheduler-decision-card {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 11px;
+  border: 1px solid #dfeaf7;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+}
+.scheduler-decision-card:hover,
+.scheduler-decision-card.active { border-color: #9fc5ff; background: #f3f8ff; }
+.scheduler-decision-card header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.scheduler-decision-card strong,
+.scheduler-decision-card small { display: block; }
+.scheduler-decision-card strong { font-size: 10px; }
+.scheduler-decision-card small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.scheduler-decision-card p { margin: 8px 0 0; color: #516986; font-size: 9px; line-height: 1.45; }
+.scheduler-decision-card footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; color: #7d8da2; font-size: 8px; }
+
+.scheduler-status {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #56708e;
+  background: #eef3f8;
+  font-size: 8px;
+  font-weight: 900;
+}
+.scheduler-status.selected { color: #08764a; background: #e4f7ef; }
+.scheduler-status.waiting { color: #9b5d00; background: #fff0d0; }
+.scheduler-status.no_route { color: #b12e45; background: #ffe8ed; }
+.scheduler-status.online { color: #08764a; background: #e4f7ef; }
+.scheduler-status.offline,
+.scheduler-status.unconfigured { color: #b12e45; background: #ffe8ed; }
+
+.scheduler-detail {
+  min-height: 480px;
+  padding: 14px;
+}
+.scheduler-empty { margin: 0; padding: 26px; color: var(--muted); font-size: 10px; text-align: center; }
+
+.scheduler-detail-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+.scheduler-detail-title h3 { margin: 0; font-size: 15px; }
+.scheduler-detail-title p { margin: 6px 0 0; color: #506986; font-size: 9px; line-height: 1.5; }
+
+.scheduler-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.scheduler-detail-meta div { min-width: 0; padding: 9px; border: 1px solid #e0ebf8; border-radius: 10px; background: #f9fbfe; }
+.scheduler-detail-meta span,
+.scheduler-detail-meta strong { display: block; }
+.scheduler-detail-meta span { color: var(--muted); font-size: 8px; }
+.scheduler-detail-meta strong { margin-top: 4px; color: #2e4d73; font-size: 9px; overflow-wrap: anywhere; }
+
+.scheduler-request {
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid #dce9f7;
+  border-radius: 11px;
+  background: #fbfdff;
+}
+.scheduler-request strong { display: block; font-size: 9px; }
+.scheduler-request p { margin: 7px 0 0; color: #516986; font-size: 8px; line-height: 1.55; white-space: pre-wrap; }
+
+.scheduler-candidates { margin-top: 14px; }
+.scheduler-candidates > h4 { margin: 0 0 9px; color: #213e63; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.scheduler-candidate {
+  margin-bottom: 8px;
+  padding: 10px 11px;
+  border: 1px solid #dfeaf7;
+  border-radius: 11px;
+  background: #fff;
+}
+.scheduler-candidate.rejected { opacity: .72; background: #fbfcfe; }
+.scheduler-candidate header { display: flex; justify-content: space-between; gap: 10px; }
+.scheduler-candidate strong,
+.scheduler-candidate small { display: block; }
+.scheduler-candidate strong { font-size: 10px; }
+.scheduler-candidate small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.scheduler-candidate p { margin: 7px 0 0; color: #526a86; font-size: 8px; line-height: 1.5; }
+.scheduler-score-line { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.scheduler-score-line span { padding: 4px 6px; border-radius: 999px; color: #4a6687; background: #eef4fb; font-size: 7px; font-weight: 800; }
+.scheduler-score { color: #2469cf; font-size: 12px; font-weight: 900; }
+
+.scheduler-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.scheduler-form-grid .full { grid-column: 1 / -1; }
+.scheduler-form-grid textarea { min-height: 74px; }
+.scheduler-checks { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 0; }
+.scheduler-checks label { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 9px; }
+.scheduler-checks input { width: auto; }
+.scheduler-simulation-result { margin-top: 10px; padding: 10px; border: 1px solid #dce9f7; border-radius: 11px; color: #48617f; background: #fbfdff; font-size: 9px; line-height: 1.5; }
+
+@media (max-width: 1100px) {
+  .scheduler-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .scheduler-runtime-pool { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scheduler-layout { grid-template-columns: 1fr; }
+  .scheduler-decision-list { max-height: 340px; }
+}
+
+@media (max-width: 720px) {
+  .scheduler-toolbar { align-items: flex-start; flex-direction: column; }
+  .scheduler-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scheduler-runtime-pool { grid-template-columns: 1fr; }
+  .scheduler-detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scheduler-form-grid { grid-template-columns: 1fr; }
+  .scheduler-form-grid .full { grid-column: auto; }
+}
