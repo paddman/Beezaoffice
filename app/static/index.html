@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>BeezaOffice — AI Workforce Command Center</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/runtime.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -21,7 +22,7 @@
         <button class="nav-item">Approvals <span class="alert-badge">3</span></button>
         <button class="nav-item" id="organizationNav">Organization</button>
         <button class="nav-item">Governance</button>
-        <button class="nav-item">Runtime</button>
+        <button class="nav-item" id="runtimeNav">Agent Runtimes <span id="runtimeCount">4</span></button>
       </nav>
       <div class="capacity-card">
         <span>Runtime capacity</span>
@@ -110,6 +111,26 @@
             <div><span>Current focus</span><strong>Incident response</strong><small>Rei → Aiden → Noah → Yuna → Mira</small></div>
           </aside>
         </div>
+      </section>
+
+      <section class="panel runtime-panel" id="runtimeMesh">
+        <div class="panel-title">
+          <div>
+            <p class="eyebrow">AGENT RUNTIME MESH</p>
+            <h2>External Agent Platforms</h2>
+          </div>
+          <div class="runtime-header-state">
+            <span id="runtimeOnline">0 online</span>
+            <span>OpenClaw · CherryAgent · Hermes · thClaws</span>
+          </div>
+        </div>
+        <p class="runtime-intro">
+          BeezaOffice remains the command and governance plane. Missions can be dispatched
+          to specialist agents running on any supported platform, while Beeza keeps the
+          mission identity, timeline, approvals, and audit trail.
+        </p>
+        <div id="runtimeGrid" class="runtime-grid"></div>
+        <div id="runtimeMessage" class="runtime-message">Select a mission, then dispatch it to a configured runtime.</div>
       </section>
 
       <section class="panel workforce-panel">
