@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import phase10_app  # noqa: F401 — install Phase 1–10 routes and workers
+import sop_hardening  # noqa: F401 — authoritative verification gates and fair run scanning
 from evaluation_models import EvaluationRun, ReplayRun
 from main import (
     Agent,
