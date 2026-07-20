@@ -13,14 +13,15 @@ BeezaOffice is an operations-first command center where agents receive missions,
 - Docker Compose deployment
 - **Agent Runtime Mesh:** OpenClaw, CherryAgent, Hermes Agent and thClaws
 - **Phase 2 runtime control:** status sync, remote result capture, Hermes safe stop and approvals
-- **Phase 3 unified event stream:**
-  - Server-side runtime synchronization every five seconds
-  - Durable normalized runtime events in PostgreSQL
-  - CherryAgent task, handoff, evidence and log capture
-  - Hermes status, approval, result and usage capture
-  - Mission-scoped Server-Sent Events stream
-  - Live filters for tasks, handoffs, evidence, approvals and errors
-  - Redis locks and bounded concurrent synchronization
+- **Phase 3 unified event stream:** durable runtime events, server synchronization and mission SSE
+- **Phase 4 collaboration bus:**
+  - Typed cross-runtime handoffs and work contracts
+  - Task dependencies and automatic unblocking
+  - Agent/runtime mailbox with delivery state
+  - Automatic dispatch to any configured runtime
+  - Result return, human review, revision and retry
+  - Follow-up watchdog, deadline detection and escalation
+  - Collaboration events projected into the live mission feed
 
 BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and approval policies.
 
@@ -37,10 +38,11 @@ Open:
 - BeezaOffice: `http://localhost:8080`
 - API health: `http://localhost:8080/api/health`
 - Runtime connectors: `http://localhost:8080/api/runtimes`
-- Event worker: `http://localhost:8080/api/runtime-event-worker`
+- Runtime event worker: `http://localhost:8080/api/runtime-event-worker`
+- Collaboration worker: `http://localhost:8080/api/collaboration/worker`
 - API docs: `http://localhost:8080/docs`
 
-## Runtime configuration
+## Runtime and collaboration configuration
 
 ```env
 CHERRYAGENT_BASE_URL=http://cherryagent-host:8787
@@ -51,42 +53,68 @@ HERMES_AUTH_TOKEN=
 
 BEEZA_RUNTIME_SYNC_ENABLED=true
 BEEZA_RUNTIME_SYNC_INTERVAL_SECONDS=5
-BEEZA_RUNTIME_SYNC_BATCH_SIZE=100
-BEEZA_RUNTIME_SYNC_CONCURRENCY=8
+
+BEEZA_COLLAB_ENABLED=true
+BEEZA_COLLAB_INTERVAL_SECONDS=3
+BEEZA_COLLAB_FOLLOW_UP_SECONDS=300
+BEEZA_COLLAB_MAX_FOLLOW_UPS=2
 ```
 
 See `docs/RUNTIME-INTEGRATIONS.md` for all four runtime adapters and security boundaries.
 
-## Phase 3 API
+## Phase 4 API
 
 ```text
-POST /api/runtimes/{runtime}/dispatch
-POST /api/runtime-dispatches/{dispatch}/sync
-POST /api/runtime-dispatches/{dispatch}/stop
-POST /api/runtime-dispatches/{dispatch}/approval
-GET  /api/missions/{mission}/runtime-events
-GET  /api/missions/{mission}/runtime-events/stream
-GET  /api/runtime-event-worker
+POST /api/missions/{mission}/handoffs
+GET  /api/missions/{mission}/collaboration
+GET  /api/collaboration/tasks
+POST /api/collaboration/tasks/{task}/actions
+POST /api/collaboration/tasks/{task}/review
+GET  /api/collaboration/inbox
+POST /api/missions/{mission}/messages
+GET  /api/collaboration/worker
+POST /api/collaboration/tick
 ```
 
-OpenClaw and thClaws remain synchronous adapters in this phase. CherryAgent and Hermes are synchronized by the server-side worker and projected into the unified event feed.
+Example handoff:
+
+```json
+{
+  "title": "Analyze storage evidence",
+  "objective": "Review the collected evidence and return the most likely root cause.",
+  "source_identity": "agent:Rei",
+  "target_runtime_key": "cherryagent",
+  "target_identity": "agent:infra",
+  "priority": "CRITICAL",
+  "review_policy": "HUMAN",
+  "auto_dispatch": true,
+  "depends_on": [],
+  "expected_outputs": ["root cause", "evidence", "recommended action"],
+  "acceptance_criteria": ["At least two evidence sources", "Confidence included"]
+}
+```
 
 ## Architecture
 
 ```text
-Browser EventSource
-  -> BeezaOffice Phase 3 API
-       -> PostgreSQL
-          - missions
-          - runtime_dispatches
-          - runtime_events
-       -> Redis
-          - sync locks
-          - worker health
-       -> Runtime Event Worker
-          -> CherryAgent snapshots
-          -> Hermes run status
-       -> Unified mission event stream
+Human / Manager Agent
+       ↓ typed HANDOFF
+Beeza Collaboration Bus
+  ├─ collaboration_tasks
+  ├─ collaboration_messages
+  ├─ dependency resolver
+  ├─ follow-up watchdog
+  └─ review / revision control
+       ↓
+Runtime Mesh
+  ├─ OpenClaw
+  ├─ CherryAgent
+  ├─ Hermes Agent
+  └─ thClaws
+       ↓
+Runtime dispatch + event workers
+       ↓
+Mission War Room / Live Events / Mailbox
 ```
 
 ## Product direction
@@ -100,4 +128,4 @@ Browser EventSource
 7. Digital Office UI
 8. Scale to 1,000 registered agents
 
-See `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/RUNTIME-INTEGRATIONS.md` and `docs/PHASE-3-EVENT-STREAM.md`.
+See `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/RUNTIME-INTEGRATIONS.md`, `docs/PHASE-3-EVENT-STREAM.md` and `docs/PHASE-4-COLLABORATION-BUS.md`.
