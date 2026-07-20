@@ -1,0 +1,317 @@
+/* Phase 7 — Agent Registry & Organization Graph */
+.registry-panel {
+  margin-top: 16px;
+  overflow: hidden;
+  scroll-margin-top: 20px;
+}
+
+.registry-header-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.registry-header-state b {
+  min-width: 26px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--blue);
+  background: #e8f2ff;
+  text-align: center;
+}
+
+.registry-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.6fr) repeat(4, minmax(130px, .8fr)) auto;
+  gap: 8px;
+  padding: 13px 16px;
+  border-top: 1px solid #edf2f8;
+  border-bottom: 1px solid #edf2f8;
+  background: #fbfdff;
+}
+
+.registry-toolbar label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.registry-toolbar input,
+.registry-toolbar select {
+  width: 100%;
+  margin-top: 5px;
+}
+
+.registry-toolbar .registry-toolbar-actions {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+}
+
+.registry-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.registry-stat {
+  padding: 10px 11px;
+  border: 1px solid #dce9f7;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.registry-stat span,
+.registry-stat strong,
+.registry-stat small { display: block; }
+.registry-stat span { color: var(--muted); font-size: 8px; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
+.registry-stat strong { margin-top: 5px; color: #173b69; font-size: 17px; }
+.registry-stat small { margin-top: 4px; color: #7c8da4; font-size: 8px; }
+
+.registry-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, .88fr) minmax(0, 1.2fr);
+  gap: 14px;
+  padding: 14px 16px 18px;
+}
+
+.registry-box {
+  min-width: 0;
+  border: 1px solid #dce9f7;
+  border-radius: 15px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.registry-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid #edf2f8;
+}
+
+.registry-box-head strong,
+.registry-box-head small { display: block; }
+.registry-box-head strong { font-size: 12px; }
+.registry-box-head small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.registry-box-head .registry-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.registry-agent-list {
+  max-height: 820px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.registry-agent-card {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 11px;
+  border: 1px solid #dfeaf7;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+}
+
+.registry-agent-card:hover,
+.registry-agent-card.active {
+  border-color: #9fc5ff;
+  background: #f3f8ff;
+}
+
+.registry-agent-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.registry-agent-card strong,
+.registry-agent-card small { display: block; }
+.registry-agent-card strong { font-size: 11px; }
+.registry-agent-card small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.registry-agent-card p { margin: 8px 0 0; color: #516986; font-size: 9px; line-height: 1.5; }
+.registry-agent-card footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; color: #7d8da2; font-size: 8px; }
+
+.registry-status {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #56708e;
+  background: #eef3f8;
+  font-size: 8px;
+  font-weight: 900;
+}
+.registry-status.available { color: #08764a; background: #e4f7ef; }
+.registry-status.busy { color: #245cc7; background: #e8f0ff; }
+.registry-status.waiting { color: #9b5d00; background: #fff0d0; }
+.registry-status.offline,
+.registry-status.suspended,
+.registry-status.retired { color: #b12e45; background: #ffe8ed; }
+
+.registry-detail {
+  min-height: 520px;
+  padding: 14px;
+}
+
+.registry-detail-empty {
+  margin: 0;
+  padding: 28px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.registry-profile-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+.registry-profile-head h3 { margin: 0; font-size: 16px; }
+.registry-profile-head p { margin: 6px 0 0; color: #506986; font-size: 10px; line-height: 1.5; }
+.registry-profile-head .registry-profile-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.registry-profile-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.registry-profile-meta div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #e0ebf8;
+  border-radius: 10px;
+  background: #f9fbfe;
+}
+.registry-profile-meta span,
+.registry-profile-meta strong { display: block; }
+.registry-profile-meta span { color: var(--muted); font-size: 8px; }
+.registry-profile-meta strong { margin-top: 4px; color: #2e4d73; font-size: 9px; overflow-wrap: anywhere; }
+
+.registry-capacity {
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid #dce9f7;
+  border-radius: 11px;
+  background: #fbfdff;
+}
+.registry-capacity header { display: flex; justify-content: space-between; gap: 10px; color: #3f5877; font-size: 9px; }
+.registry-capacity .registry-meter { height: 7px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #e8eef6; }
+.registry-capacity .registry-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7eb3ff, #2476ed); }
+
+.registry-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e5eef8;
+}
+.registry-section > h4 { margin: 0 0 9px; color: #213e63; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+
+.registry-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.registry-chip {
+  padding: 5px 7px;
+  border: 1px solid #d9e7f8;
+  border-radius: 999px;
+  color: #4b6789;
+  background: #fff;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.registry-report-list,
+.registry-delegation-list,
+.registry-skill-list {
+  display: grid;
+  gap: 7px;
+}
+.registry-relation,
+.registry-delegation,
+.registry-skill {
+  padding: 9px 10px;
+  border: 1px solid #e0ebf8;
+  border-radius: 10px;
+  background: #fff;
+}
+.registry-relation strong,
+.registry-relation small,
+.registry-delegation strong,
+.registry-delegation small,
+.registry-skill strong,
+.registry-skill small { display: block; }
+.registry-relation strong,
+.registry-delegation strong,
+.registry-skill strong { font-size: 9px; }
+.registry-relation small,
+.registry-delegation small,
+.registry-skill small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+
+.registry-org-view {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+.registry-department {
+  border: 1px solid #dce9f7;
+  border-radius: 13px;
+  overflow: hidden;
+  background: #fff;
+}
+.registry-department > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 11px;
+  background: #f5f9ff;
+}
+.registry-department > header strong { font-size: 10px; }
+.registry-department > header span { color: #6f839d; font-size: 8px; }
+.registry-department-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 7px; padding: 9px; }
+.registry-org-agent { padding: 8px; border: 1px solid #e0ebf8; border-radius: 9px; background: #fff; }
+.registry-org-agent strong,
+.registry-org-agent small { display: block; }
+.registry-org-agent strong { font-size: 9px; }
+.registry-org-agent small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+
+.registry-tabs { display: flex; gap: 6px; }
+.registry-tab {
+  padding: 6px 9px;
+  border: 1px solid #d8e6f6;
+  border-radius: 999px;
+  color: #58708e;
+  background: #fff;
+  font-size: 8px;
+  font-weight: 850;
+}
+.registry-tab.active { color: var(--blue); border-color: #9fc5ff; background: #eaf3ff; }
+
+.registry-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.registry-form-grid .full { grid-column: 1 / -1; }
+.registry-form-grid textarea { min-height: 72px; }
+
+.registry-message { min-height: 18px; margin: 0; padding: 0 16px 14px; color: var(--muted); font-size: 9px; }
+.registry-message.success { color: var(--green); }
+.registry-message.error { color: var(--red); }
+
+@media (max-width: 1100px) {
+  .registry-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .registry-toolbar .registry-toolbar-actions { align-items: center; }
+  .registry-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .registry-layout { grid-template-columns: 1fr; }
+  .registry-agent-list { max-height: 360px; }
+}
+
+@media (max-width: 720px) {
+  .registry-toolbar { grid-template-columns: 1fr; }
+  .registry-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .registry-profile-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .registry-form-grid { grid-template-columns: 1fr; }
+  .registry-form-grid .full { grid-column: auto; }
+}
