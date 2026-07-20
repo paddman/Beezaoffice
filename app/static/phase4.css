@@ -1,0 +1,250 @@
+/* Phase 4 — cross-runtime collaboration bus */
+.collaboration-panel {
+  margin-top: 16px;
+  scroll-margin-top: 20px;
+  overflow: hidden;
+}
+
+.collaboration-header-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.collaboration-header-state b {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--blue);
+  background: #e8f2ff;
+  text-align: center;
+}
+
+.collaboration-worker {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid #e9f0f8;
+  border-bottom: 1px solid #e9f0f8;
+  color: #637994;
+  background: #fbfdff;
+  font-size: 10px;
+}
+
+.collaboration-worker strong { color: #2e4a6d; }
+
+.collaboration-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #edf2f8;
+}
+
+.collaboration-stat {
+  padding: 10px;
+  border: 1px solid #e0ebf8;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.collaboration-stat span,
+.collaboration-stat strong { display: block; }
+.collaboration-stat span { color: #7890aa; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.collaboration-stat strong { margin-top: 4px; color: #203d61; font-size: 18px; }
+
+.collaboration-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr);
+  min-height: 520px;
+}
+
+.collaboration-tasks,
+.collaboration-mailbox { min-width: 0; }
+.collaboration-mailbox { border-left: 1px solid #e3edf8; background: #f9fbfe; }
+
+.collaboration-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid #e5eef8;
+}
+
+.collaboration-section-head strong { font-size: 12px; }
+.collaboration-section-head small { color: #7d90a8; font-size: 9px; }
+
+.collaboration-board {
+  display: grid;
+  gap: 10px;
+  max-height: 720px;
+  overflow: auto;
+  padding: 14px 16px 18px;
+  background: linear-gradient(180deg, #fff, #f8fbff);
+}
+
+.collaboration-task-card {
+  position: relative;
+  overflow: hidden;
+  padding: 13px;
+  border: 1px solid #dce9f7;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.collaboration-task-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: #7baeff;
+}
+
+.collaboration-task-card.completed::before { background: var(--green); }
+.collaboration-task-card.blocked::before,
+.collaboration-task-card.failed::before,
+.collaboration-task-card.escalated::before { background: var(--red); }
+.collaboration-task-card.waiting_dependency::before,
+.collaboration-task-card.waiting_approval::before,
+.collaboration-task-card.review::before { background: var(--amber); }
+
+.collaboration-task-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.collaboration-task-card header > div { min-width: 0; }
+.collaboration-task-card h3 { margin: 0; color: #1e3b60; font-size: 12px; }
+.collaboration-task-card header small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #7188a3;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collaboration-status {
+  flex: none;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #1769c9;
+  background: #e8f2ff;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.collaboration-status.completed { color: #087749; background: #e5f7ef; }
+.collaboration-status.blocked,
+.collaboration-status.failed,
+.collaboration-status.escalated { color: #b52e43; background: #ffe9ed; }
+.collaboration-status.waiting_dependency,
+.collaboration-status.waiting_approval,
+.collaboration-status.review { color: #a26700; background: #fff2d8; }
+
+.collaboration-objective { margin: 9px 0; color: #49627f; font-size: 10px; line-height: 1.5; }
+.collaboration-route {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 9px 0;
+}
+.collaboration-route span {
+  padding: 4px 7px;
+  border: 1px solid #dce8f6;
+  border-radius: 999px;
+  color: #527096;
+  background: #f8fbff;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.collaboration-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #8394a9;
+  font-size: 8px;
+}
+
+.collaboration-task-result {
+  margin-top: 9px;
+  padding: 9px;
+  border-radius: 9px;
+  color: #405c7b;
+  background: #f4f8fd;
+  font-size: 9px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.collaboration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.collaboration-actions button { padding: 6px 9px; font-size: 8px; }
+
+.collaboration-message-list {
+  display: grid;
+  gap: 8px;
+  max-height: 720px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.collaboration-message {
+  padding: 11px;
+  border: 1px solid #e0eaf5;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.collaboration-message header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.collaboration-message header strong { color: #29496e; font-size: 10px; }
+.collaboration-message header span {
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #1769c9;
+  background: #eaf3ff;
+  font-size: 7px;
+  font-weight: 900;
+}
+.collaboration-message small { display: block; margin-top: 4px; color: #8496ab; font-size: 8px; }
+.collaboration-message p { margin: 7px 0 0; color: #506984; font-size: 9px; line-height: 1.45; }
+
+.collaboration-empty { padding: 28px 18px; color: #7d90a8; text-align: center; font-size: 10px; }
+
+#handoffDialog form { width: min(720px, calc(100vw - 32px)); }
+.handoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.handoff-grid .full { grid-column: 1 / -1; }
+.handoff-check { display: flex; align-items: center; gap: 8px; color: #506984; font-size: 10px; }
+.handoff-check input { width: auto; }
+
+@media (max-width: 980px) {
+  .collaboration-layout { grid-template-columns: 1fr; }
+  .collaboration-mailbox { border-top: 1px solid #e3edf8; border-left: 0; }
+  .collaboration-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .collaboration-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .handoff-grid { grid-template-columns: 1fr; }
+  .handoff-grid .full { grid-column: auto; }
+  .collaboration-task-card header { display: grid; }
+}
