@@ -14,7 +14,73 @@ import phase9_app
 from collaboration_models import CollaborationTask
 from collaboration_service import collaboration_event
 from evaluation_models import EvaluationRun, EvidenceRecord, ReplayRun, policy_view
-from main import Mission, RuntimeDispatch, SessionLocal, bounded_payload, utcnow
+from governance_models import GovernanceIdentity, RoleBinding
+from main import (
+    Mission,
+    RuntimeDispatch,
+    SessionLocal,
+    app,
+    bounded_payload,
+    redis_client,
+    utcnow,
+)
+
+
+def bootstrap_evaluator_identity() -> None:
+    """Create the evaluator principal before any worker startup handler runs."""
+    with SessionLocal() as db:
+        now = utcnow()
+        identity_key = "service:evaluator"
+        identity = db.scalar(
+            select(GovernanceIdentity).where(
+                GovernanceIdentity.identity_key == identity_key
+            )
+        )
+        if identity is None:
+            db.add(
+                GovernanceIdentity(
+                    identity_key=identity_key,
+                    tenant_key="tenant:beeza",
+                    identity_type="SERVICE",
+                    display_name="Beeza Evidence Evaluator",
+                    department_key="dept:quality",
+                    status="ACTIVE",
+                    clearance="RESTRICTED",
+                    daily_budget_usd=1000.0,
+                    monthly_budget_usd=30000.0,
+                    attributes={
+                        "seeded": True,
+                        "purpose": "evidence evaluation, verification and replay comparison",
+                    },
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        binding = db.scalar(
+            select(RoleBinding).where(
+                RoleBinding.identity_key == identity_key,
+                RoleBinding.role_key == "role:service",
+                RoleBinding.scope_type == "GLOBAL",
+                RoleBinding.scope_key == "*",
+            )
+        )
+        if binding is None:
+            db.add(
+                RoleBinding(
+                    binding_key=f"BIND-{uuid4().hex[:14].upper()}",
+                    identity_key=identity_key,
+                    role_key="role:service",
+                    scope_type="GLOBAL",
+                    scope_key="*",
+                    created_by="system:phase9",
+                    created_at=now,
+                )
+            )
+        db.commit()
+
+
+if bootstrap_evaluator_identity not in app.router.on_startup:
+    app.router.on_startup.insert(0, bootstrap_evaluator_identity)
 
 
 def clean_result(task: CollaborationTask) -> dict[str, Any]:
@@ -99,7 +165,7 @@ def stable_evaluate_task(
             EvaluationRun.result_hash == result_hash,
             EvaluationRun.policy_key == policy.policy_key,
         )
-        .order_by(EvaluationRun.created_at.desc())
+        .order_by(EvaluationRun.created_at.desc(), EvaluationRun.id.desc())
     )
     if existing is not None and not force:
         return existing
@@ -287,12 +353,20 @@ def complete_replay_state(db: Session, replay: ReplayRun) -> bool:
     return before != after
 
 
-def fair_evaluation_tick() -> dict[str, int]:
-    evaluated = passed = warned = failed = replay_updates = 0
-    with SessionLocal() as db:
-        policy = evaluation_service.seed_evaluation_policy(db)
-        scan_limit = max(1000, evaluation_service.EVALUATOR_BATCH * 20)
-        tasks = list(
+def rotating_tasks(db: Session, scan_limit: int) -> list[CollaborationTask]:
+    cursor = int(redis_client.get("beezaoffice:evaluator-task-cursor") or 0)
+    statement = (
+        select(CollaborationTask)
+        .where(
+            CollaborationTask.status.in_(evaluation_service.EVALUATABLE_STATUSES),
+            CollaborationTask.id > cursor,
+        )
+        .order_by(CollaborationTask.id.asc())
+        .limit(scan_limit)
+    )
+    rows = list(db.scalars(statement).all())
+    if not rows and cursor:
+        rows = list(
             db.scalars(
                 select(CollaborationTask)
                 .where(
@@ -300,11 +374,49 @@ def fair_evaluation_tick() -> dict[str, int]:
                         evaluation_service.EVALUATABLE_STATUSES
                     )
                 )
-                .order_by(CollaborationTask.updated_at.asc())
+                .order_by(CollaborationTask.id.asc())
                 .limit(scan_limit)
             ).all()
         )
-        for task in tasks:
+    redis_client.set(
+        "beezaoffice:evaluator-task-cursor",
+        str(rows[-1].id if rows else 0),
+    )
+    return rows
+
+
+def rotating_replays(db: Session, scan_limit: int) -> list[ReplayRun]:
+    cursor = int(redis_client.get("beezaoffice:evaluator-replay-cursor") or 0)
+    rows = list(
+        db.scalars(
+            select(ReplayRun)
+            .where(ReplayRun.id > cursor)
+            .order_by(ReplayRun.id.asc())
+            .limit(scan_limit)
+        ).all()
+    )
+    if not rows and cursor:
+        rows = list(
+            db.scalars(
+                select(ReplayRun)
+                .order_by(ReplayRun.id.asc())
+                .limit(scan_limit)
+            ).all()
+        )
+    redis_client.set(
+        "beezaoffice:evaluator-replay-cursor",
+        str(rows[-1].id if rows else 0),
+    )
+    return rows
+
+
+def fair_evaluation_tick() -> dict[str, int]:
+    evaluated = passed = warned = failed = replay_updates = 0
+    with SessionLocal() as db:
+        evaluation_service.seed_evaluation_policy(db)
+        policy = evaluation_service.active_policy(db)
+        scan_limit = max(200, evaluation_service.EVALUATOR_BATCH * 10)
+        for task in rotating_tasks(db, scan_limit):
             result_hash = stable_result_hash(db, task)
             existing = db.scalar(
                 select(EvaluationRun.id).where(
@@ -323,14 +435,7 @@ def fair_evaluation_tick() -> dict[str, int]:
             if evaluated >= evaluation_service.EVALUATOR_BATCH:
                 break
 
-        replays = list(
-            db.scalars(
-                select(ReplayRun)
-                .order_by(ReplayRun.updated_at.asc())
-                .limit(scan_limit)
-            ).all()
-        )
-        for replay in replays:
+        for replay in rotating_replays(db, scan_limit):
             needs_update = (
                 replay.status not in evaluation_service.REPLAY_TERMINAL_STATUSES
                 or not replay.comparison
@@ -352,7 +457,7 @@ def latest_evaluation_stats(db: Session) -> dict[str, Any]:
     rows = list(
         db.scalars(
             select(EvaluationRun)
-            .order_by(EvaluationRun.created_at.desc())
+            .order_by(EvaluationRun.created_at.desc(), EvaluationRun.id.desc())
             .limit(10000)
         ).all()
     )
@@ -363,7 +468,7 @@ def latest_evaluation_stats(db: Session) -> dict[str, Any]:
     replays = list(
         db.scalars(
             select(ReplayRun)
-            .order_by(ReplayRun.created_at.desc())
+            .order_by(ReplayRun.created_at.desc(), ReplayRun.id.desc())
             .limit(10000)
         ).all()
     )
