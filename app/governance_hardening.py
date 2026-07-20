@@ -8,8 +8,13 @@ from sqlalchemy.orm import Session
 
 import governance_service
 import phase6_app
-from governance_models import GovernanceIdentity, GovernanceRole, RoleBinding
-from main import app
+from governance_models import (
+    ApprovalRequest,
+    GovernanceIdentity,
+    GovernanceRole,
+    RoleBinding,
+)
+from main import SessionLocal, app
 
 
 def scoped_role_permissions(
@@ -63,13 +68,48 @@ governance_service.role_permissions = scoped_role_permissions
 phase6_app.role_permissions = scoped_role_permissions
 
 
+def header_value(headers: list[tuple[bytes, bytes]], name: bytes) -> str:
+    for key, value in headers:
+        if key.lower() == name:
+            return value.decode("latin-1")
+    return ""
+
+
 @app.middleware("http")
-async def normalize_governance_control_context(request: Request, call_next: Any):
-    """Administrative recovery calls must not recursively require cost approval."""
-    if request.url.path.startswith("/api/governance/"):
+async def harden_governance_context(request: Request, call_next: Any):
+    """Bind approvals to their target and keep recovery calls non-recursive."""
+    path = request.url.path
+    headers = list(request.scope.get("headers", []))
+    changed = False
+
+    approval_key = header_value(headers, b"x-beeza-approval-key").strip()
+    if approval_key:
+        identity_key = (
+            header_value(headers, b"x-beeza-identity").strip()
+            or governance_service.DEFAULT_IDENTITY
+        )
+        with SessionLocal() as db:
+            approval = db.scalar(
+                select(ApprovalRequest).where(
+                    ApprovalRequest.approval_key == approval_key
+                )
+            )
+        if (
+            approval is None
+            or approval.requester_identity != identity_key
+            or approval.target not in {"*", path}
+        ):
+            headers = [
+                (name, value)
+                for name, value in headers
+                if name.lower() != b"x-beeza-approval-key"
+            ]
+            changed = True
+
+    if path.startswith("/api/governance/"):
         headers = [
             (name, value)
-            for name, value in request.scope.get("headers", [])
+            for name, value in headers
             if name.lower() not in {
                 b"x-beeza-estimated-cost-usd",
                 b"x-beeza-risk-level",
@@ -81,6 +121,9 @@ async def normalize_governance_control_context(request: Request, call_next: Any)
                 (b"x-beeza-risk-level", b"NORMAL"),
             ]
         )
+        changed = True
+
+    if changed:
         request.scope["headers"] = headers
         if hasattr(request, "_headers"):
             delattr(request, "_headers")
