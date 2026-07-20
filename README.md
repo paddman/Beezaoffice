@@ -24,20 +24,26 @@ BeezaOffice is an operations-first command center where agents receive missions,
 - **Phase 5 agent meeting manager:**
   - Structured agenda and role-based participants
   - Turn-based discussion across connected runtimes
-  - Bounded rounds to prevent repetitive agent loops
-  - Moderator, executive, domain, critic, PMO and observer roles
-  - Confidence score capture per contribution
-  - Human decision gate with accept, reject and executive override
-  - Accepted decisions converted into Collaboration Bus action items
-  - Meeting events projected into the live mission feed
+  - Bounded rounds to prevent repetitive loops
+  - Human decision gate and action-item generation
+- **Phase 6 governance and identity:**
+  - Tenant, department, human, agent, service and runtime identities
+  - Role-based access control with scoped role bindings
+  - Clearance checks for public, internal, confidential and restricted data
+  - Risk and cost-aware policy rules
+  - Second-person approval workflow for high-risk execution
+  - Per-identity daily and monthly budgets
+  - Emergency runtime execution kill switch
+  - SHA-256 hash-chained audit ledger
+  - Governance checks at both HTTP and internal runtime-dispatch boundaries
 
-BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and approval policies.
+BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and local approval policies.
 
 ## Quick deploy
 
 ```bash
 cp .env.example .env
-# Configure BEEZA_AUTH_TOKEN and only the runtimes being used.
+# Set strong PostgreSQL and BeezaOffice credentials and configure only the runtimes in use.
 docker compose -f compose.yml up -d --build
 ```
 
@@ -45,20 +51,20 @@ Open:
 
 - BeezaOffice: `http://localhost:8080`
 - API health: `http://localhost:8080/api/health`
-- Runtime connectors: `http://localhost:8080/api/runtimes`
+- API docs: `http://localhost:8080/docs`
 - Runtime event worker: `http://localhost:8080/api/runtime-event-worker`
 - Collaboration worker: `http://localhost:8080/api/collaboration/worker`
 - Meeting worker: `http://localhost:8080/api/meeting-worker`
-- API docs: `http://localhost:8080/docs`
+- Governance context: `http://localhost:8080/api/governance/context`
 
-## Runtime, collaboration and meeting configuration
+## Core configuration
 
 ```env
-CHERRYAGENT_BASE_URL=http://cherryagent-host:8787
-CHERRYAGENT_AUTH_TOKEN=
+BEEZA_AUTH_TOKEN=SET_A_LONG_RANDOM_TOKEN
 
-HERMES_BASE_URL=http://hermes-host:8642
-HERMES_AUTH_TOKEN=
+BEEZA_GOVERNANCE_ENFORCED=true
+BEEZA_DEFAULT_IDENTITY=human:owner
+BEEZA_APPROVAL_TTL_MINUTES=60
 
 BEEZA_RUNTIME_SYNC_ENABLED=true
 BEEZA_RUNTIME_SYNC_INTERVAL_SECONDS=5
@@ -70,116 +76,173 @@ BEEZA_COLLAB_MAX_FOLLOW_UPS=2
 
 BEEZA_MEETING_ENABLED=true
 BEEZA_MEETING_INTERVAL_SECONDS=3
-BEEZA_MEETING_BATCH_SIZE=50
 BEEZA_MEETING_TURN_TIMEOUT_SECONDS=900
 ```
 
-See `docs/RUNTIME-INTEGRATIONS.md` for all four runtime adapters and security boundaries.
+## Governance request headers
 
-## Phase 5 API
+Governed browser and API mutations can include:
 
 ```text
-POST /api/missions/{mission}/meetings
-GET  /api/missions/{mission}/meetings
-GET  /api/meetings/{meeting}
-POST /api/meetings/{meeting}/start
-POST /api/meetings/{meeting}/tick
-POST /api/meetings/{meeting}/decision
-POST /api/meetings/{meeting}/cancel
-GET  /api/meeting-worker
-POST /api/meeting-worker/tick
+Authorization: Bearer <BEEZA_AUTH_TOKEN>
+X-Beeza-Identity: human:owner
+X-Beeza-Risk-Level: NORMAL
+X-Beeza-Data-Classification: INTERNAL
+X-Beeza-Estimated-Cost-USD: 0
+X-Beeza-Approval-Key: APR-...        # only when an approved request is required
 ```
 
-Example meeting:
+The Command Center Governance panel sets these headers automatically.
 
-```json
-{
-  "title": "Incident remediation decision",
-  "objective": "Review the verified evidence, challenge the options and decide a safe remediation plan.",
-  "agenda": [
-    "Review evidence",
-    "Compare options and failure modes",
-    "Select decision",
-    "Assign action items"
-  ],
-  "max_rounds": 2,
-  "decision_rule": "EXECUTIVE",
-  "moderator_identity": "agent:Beeza Moderator",
-  "owner_identity": "agent:Rei",
-  "participants": [
-    {
-      "identity": "agent:Beeza Moderator",
-      "runtime_key": "cherryagent",
-      "role": "MODERATOR"
-    },
-    {
-      "identity": "agent:Infrastructure Specialist",
-      "runtime_key": "openclaw",
-      "role": "DOMAIN"
-    },
-    {
-      "identity": "agent:Devil's Advocate",
-      "runtime_key": "hermes",
-      "role": "CRITIC"
-    },
-    {
-      "identity": "agent:PMO",
-      "runtime_key": "thclaws",
-      "role": "PMO"
-    }
-  ]
-}
+## Seeded identities
+
+| Identity | Purpose |
+|---|---|
+| `human:owner` | Platform owner and emergency control authority |
+| `human:executive` | Independent second approver |
+| `human:operator` | Operational mission and runtime control |
+| `human:auditor` | Read-only audit and governance review |
+| `agent:Beeza Commander` | Agent manager and mission coordinator |
+| `agent:Beeza Moderator` | Structured meeting moderator |
+| `service:runtime` | Internal runtime dispatch service |
+| `service:collaboration` | Collaboration scheduler |
+| `service:meeting` | Meeting scheduler |
+| `runtime:openclaw`, `runtime:cherryagent`, `runtime:hermes`, `runtime:thclaws` | Runtime principals |
+
+The 12 founding BeezaOffice agents are also seeded as agent identities.
+
+## Governance behavior
+
+### RBAC
+
+Every mutating API route is mapped to a permission such as:
+
+```text
+mission:create
+runtime:dispatch
+runtime:stop
+handoff:create
+task:control
+task:review
+meeting:create
+meeting:start
+meeting:decide
+approval:decide
+governance:kill-switch
 ```
 
-Example decision:
+Roles grant exact or wildcard permissions such as `runtime:*`.
 
-```json
-{
-  "title": "Approve staged remediation",
-  "rationale": "The staged option has the strongest evidence and the lowest rollback risk.",
-  "status": "ACCEPTED",
-  "decided_by": "agent:Rei",
-  "confidence": 0.88,
-  "votes": {},
-  "action_items": [
-    {
-      "title": "Execute staged remediation",
-      "objective": "Apply the approved change, preserve evidence and verify service recovery.",
-      "target_runtime_key": "openclaw",
-      "target_identity": "agent:infra",
-      "priority": "CRITICAL",
-      "review_policy": "HUMAN",
-      "expected_outputs": ["change evidence", "verification result"],
-      "acceptance_criteria": ["service recovered", "rollback remains available"]
-    }
-  ]
-}
+### High-risk approval
+
+A `HIGH` or `CRITICAL` runtime dispatch, task control action or meeting decision may return HTTP `428` with a pending approval request.
+
+```text
+Requester performs high-risk action
+  → BeezaOffice returns APR-...
+  → switch to human:executive
+  → approve request
+  → switch back to requester
+  → arm approval key
+  → retry original action
+  → approval becomes USED
 ```
+
+The requester cannot approve its own request.
+
+### Kill switch
+
+Disabling runtime execution blocks:
+
+- Runtime dispatch
+- Runtime stop and approval controls
+- Cross-runtime handoff execution
+- Task control actions
+- Meeting start, control and decision execution
+- Internal meeting and collaboration worker dispatches
+
+Read-only monitoring and governance recovery remain available.
+
+### Budget enforcement
+
+An estimated cost supplied through `X-Beeza-Estimated-Cost-USD` is checked against the current identity's daily and monthly limits. Successful governed mutations can create budget reservations, while actual charges can be recorded through the budget API.
+
+### Audit chain
+
+Every governed mutation records:
+
+- Identity and permission
+- Method, path and mission resource
+- Outcome and response status
+- Risk, classification and estimated cost
+- Source address and request ID
+- Previous hash and current SHA-256 record hash
+
+The audit verification endpoint recomputes the chain and reports the first broken record.
+
+## Phase 6 API
+
+```text
+GET  /api/governance/context
+GET  /api/governance/identities
+POST /api/governance/identities
+GET  /api/governance/roles
+POST /api/governance/bindings
+GET  /api/governance/policies
+POST /api/governance/policies
+GET  /api/governance/approvals
+POST /api/governance/approvals
+POST /api/governance/approvals/{approval}/decision
+GET  /api/governance/controls
+POST /api/governance/kill-switch
+GET  /api/governance/budget
+POST /api/governance/budget/charge
+GET  /api/governance/audit
+GET  /api/governance/audit/verify
+```
+
+## Runtime configuration
+
+```env
+OPENCLAW_BASE_URL=http://openclaw-host:18789
+OPENCLAW_AUTH_TOKEN=
+OPENCLAW_AGENT_TARGET=openclaw/default
+
+CHERRYAGENT_BASE_URL=http://cherryagent-host:8787
+CHERRYAGENT_AUTH_TOKEN=
+
+HERMES_BASE_URL=http://hermes-host:8642
+HERMES_AUTH_TOKEN=
+HERMES_MODEL=hermes-agent
+
+THCLAW_BASE_URL=http://thclaws-host:7878
+THCLAW_AUTH_TOKEN=
+THCLAW_MODEL=
+THCLAW_WORKSPACE_DIR=
+```
+
+See `docs/RUNTIME-INTEGRATIONS.md` for adapter-specific setup and security boundaries.
 
 ## Architecture
 
 ```text
-Mission
-  ↓
-Structured Meeting Manager
-  ├─ meetings
-  ├─ meeting_participants
-  ├─ meeting_turns
-  ├─ meeting_decisions
-  ├─ bounded round scheduler
-  └─ human decision gate
-       ↓ role-specific speaking turns
-Runtime Mesh
-  ├─ OpenClaw
-  ├─ CherryAgent
-  ├─ Hermes Agent
-  └─ thClaws
-       ↓ contributions + confidence
-Meeting Decision
-       ↓ accepted action items
-Collaboration Bus
-       ↓ execution + follow-up + review
-Mission War Room / Live Events
+Human / Agent / Service Identity
+        ↓ RBAC + clearance + budget + policy
+Governance Middleware
+        ├─ approval workflow
+        ├─ emergency kill switch
+        ├─ budget ledger
+        └─ hash-chained audit
+        ↓
+Mission / Meeting / Collaboration APIs
+        ↓
+Governed Runtime Dispatch Boundary
+        ├─ OpenClaw
+        ├─ CherryAgent
+        ├─ Hermes Agent
+        └─ thClaws
+        ↓
+Runtime Events → Evidence → Review → Decision
 ```
 
 ## Product direction
@@ -188,10 +251,12 @@ Mission War Room / Live Events
 2. Durable Mission Runtime
 3. Collaboration Protocol
 4. Structured Meetings and Decisions
-5. Organization and Chain of Command
-6. Scheduler and Runtime Pool
-7. Governance and Audit
-8. Digital Office UI
-9. Scale to 1,000 registered agents
+5. Governance and Identity
+6. Agent Registry and Organization Graph
+7. Scheduler and Runtime Pool
+8. Evaluation, Verification and Replay
+9. SOP Builder
+10. Enterprise Deployment
+11. Scale to 1,000 registered agents
 
-See `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/RUNTIME-INTEGRATIONS.md`, `docs/PHASE-3-EVENT-STREAM.md`, `docs/PHASE-4-COLLABORATION-BUS.md` and `docs/PHASE-5-MEETING-MANAGER.md`.
+See `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/RUNTIME-INTEGRATIONS.md`, `docs/PHASE-3-EVENT-STREAM.md`, `docs/PHASE-4-COLLABORATION-BUS.md`, `docs/PHASE-5-MEETING-MANAGER.md` and `docs/PHASE-6-GOVERNANCE-IDENTITY.md`.
