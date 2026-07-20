@@ -7,6 +7,7 @@ from sqlalchemy import select
 from governance_models import GovernanceIdentity, RoleBinding
 from main import SessionLocal, app, utcnow
 from phase6_app import app as governed_app  # noqa: F401 — register Phase 6
+import governance_hardening  # noqa: F401 — scoped RBAC and recovery middleware
 
 app.version = "0.7.0"
 
