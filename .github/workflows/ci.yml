@@ -115,7 +115,9 @@ jobs:
           sh -n deploy/backup/run-backup.sh
           sh -n deploy/backup/restore-backup.sh
           sh -n deploy/install/install.sh
+          touch deploy/install/.env
           docker compose -f deploy/install/compose.production.yml config >/dev/null
+          rm -f deploy/install/.env
           docker compose -f deploy/pilot/compose.yml config >/dev/null
         env:
           BEEZA_IMAGE: ghcr.io/paddman/beezaoffice@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
