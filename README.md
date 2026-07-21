@@ -1,10 +1,12 @@
 # BeezaOffice
 
-**AI Workforce Operating System** for operating 10–1,000 governed AI agents across private, sovereign and enterprise environments.
+**AI Workforce Operating System** for operating 10–1,000 governed AI agents across private, enterprise and sovereign environments.
 
-BeezaOffice is the command, governance and business-evidence plane above OpenClaw, CherryAgent, Hermes Agent and thClaws. It turns agent work into durable missions with collaboration, meetings, intelligent routing, evidence verification, reusable SOPs, standard protocols, enterprise controls and measurable business outcomes.
+BeezaOffice is the command, governance, evidence and commercial control plane above OpenClaw, CherryAgent, Hermes Agent and thClaws. It turns agent work into durable missions, verified outcomes and measurable business value.
 
-## Current platform
+Current application version: **0.15.0**.
+
+## Platform
 
 | Phase | Capability |
 |---:|---|
@@ -18,145 +20,212 @@ BeezaOffice is the command, governance and business-evidence plane above OpenCla
 | 9 | Evidence evaluation, acceptance checks, provenance, replay and quality scoring |
 | 10 | Versioned SOP Builder, approval nodes, verification gates and rollback |
 | 11 | A2A, MCP tools subset, OpenAI-compatible API, signed webhooks and protocol events |
-| 12 | Multi-tenant Enterprise Platform, OIDC sessions, scoped API keys, rate limits, backup/DR, SIEM and Kubernetes HA |
-| **13** | **Verified-work economics, Executive KPIs, Department scorecards, Agent economics, SLA, billing meters and Industry Packs** |
+| 12 | Multi-tenant Enterprise Platform, OIDC, scoped API keys, rate limits, backup/DR, SIEM and Kubernetes HA |
+| 13 | Verified-work economics, Executive KPIs, Department scorecards, Agent economics, SLA, billing and Industry Packs |
+| **14** | **Tenant onboarding, signed licenses, contract entitlements, quota enforcement, deployment activation, white label, signed releases and production installer** |
 
-## Phase 13 — Executive & Business Layer
-
-### Verified business outcomes
-
-Evaluation Runs are synchronized into tenant-owned business outcome records:
+## Architecture
 
 ```text
-PASS  → VERIFIED
-WARN  → REVIEW
-FAIL  → FAILED
-ERROR → FAILED
+Enterprise Identity / API Key
+        ↓ tenant + rate limit
+Commercial License ∩ Contract Entitlement
+        ↓ feature + quota enforcement
+Governance and Audit
+        ↓
+Mission / Meeting / Collaboration / SOP / Protocol
+        ↓
+Agent Registry + Intelligent Scheduler
+        ↓
+OpenClaw / CherryAgent / Hermes / thClaws
+        ↓
+Runtime Events + Evidence
+        ↓
+Evaluation + Approval + Replay
+        ↓
+Verified Business Outcome
+        ↓
+Executive KPI / Billing / SIEM / Commercial Release
 ```
 
-Each outcome can contain:
+## Phase 14 — Commercial Productization
 
-- Quality score and evidence count
-- Baseline versus actual duration
-- Hours saved
-- Baseline versus actual cost
-- Cost saved
-- Attributed revenue value
-- SLA target and compliance
-- Department and Agent attribution
-- Evaluation result hash
-- Measurement assumptions
+### Signed deployment licenses
 
-Automatic records are marked `ESTIMATED`. They use explicit Task context when supplied; otherwise they use a stable Mission-priority baseline and the configured labor rate. Confirmed finance or operational values can be entered as `MANUAL`; the worker will not overwrite them.
+BeezaOffice accepts asymmetric JWT licenses bound to a Tenant and Deployment ID.
 
-The synchronization path is idempotent. Unchanged evaluated work keeps its original update timestamp and does not increment the verified-outcome meter again.
+```env
+BEEZA_LICENSE_MODE=development  # local unrestricted seed
+BEEZA_LICENSE_MODE=warn         # allow with warning headers
+BEEZA_LICENSE_MODE=enforce      # block unlicensed execution
 
-### Executive dashboard
+BEEZA_DEPLOYMENT_ID=deployment:customer-primary
+BEEZA_LICENSE_ISSUER=beezaoffice-license
+BEEZA_LICENSE_AUDIENCE=beezaoffice
+BEEZA_LICENSE_ALGORITHMS=EdDSA,RS256,ES256
+BEEZA_LICENSE_PUBLIC_KEY=
+BEEZA_LICENSE_TOKEN=
+```
 
-The dashboard provides:
+Production should use `enforce`. The application stores only the token SHA-256 hash and verified claims; the raw token is not persisted.
 
-- Verified outcome count and verification rate
-- Average quality
-- Evidence count
-- Hours and cost saved
-- Revenue value and total value created
-- Value-to-cost ratio
-- SLA compliance
-- Department scorecards
-- Agent economics for the selected period
-- Daily value trend
-- Top verified outcomes
+Generate offline Ed25519 keys:
 
-### Integrity-hashed snapshots
+```bash
+python deploy/license/generate-keys.py \
+  --private-key /secure/offline/beeza-license-private.pem \
+  --public-key beeza-license-public.pem
+```
 
-Executive snapshots preserve a fixed period scorecard with a SHA-256 integrity hash for board packs, reports and audit references.
+Issue a deployment-bound license:
 
-### Usage and billing
+```bash
+python deploy/license/issue-license.py \
+  --private-key /secure/offline/beeza-license-private.pem \
+  --tenant-key tenant:customer-a \
+  --deployment-id deployment:customer-a-primary \
+  --plan-key plan:enterprise \
+  --days 365 \
+  --output customer-a.jwt
+```
 
-Initial tenant meters:
+Verify offline:
+
+```bash
+python deploy/license/verify-license.py \
+  --public-key beeza-license-public.pem \
+  --token customer-a.jwt \
+  --tenant-key tenant:customer-a \
+  --deployment-id deployment:customer-a-primary
+```
+
+### Contract and license intersection
+
+Effective access is the intersection of:
 
 ```text
-api_requests
-runtime_dispatches
-external_tasks
-sop_runs
-backup_runs
-verified_outcomes
-pack_installs
+Active Phase 13 subscription
+∩
+Verified signed license
 ```
 
-Seeded plans:
+Effective quotas use the lower positive limit from both sources.
 
-- Team
-- Enterprise
-- Sovereign
+| Plan | Agents | Concurrent work | Tenants | Deployments |
+|---|---:|---:|---:|---:|
+| Team | 50 | 20 | 1 | 1 |
+| Enterprise | 500 | 100 | 10 | 4 |
+| Sovereign | 1,000 | 200 | 50 | 20 |
 
-Billing output is an operational estimate; it does not calculate tax, discounts, support retainers or infrastructure pass-through.
-
-### Industry Packs
-
-Published manifests:
-
-- Government Document Operations
-- IDC & SOC Incident Command
-- AI CFO Office
-- Customer Support Operations
-
-Installation records a governed tenant manifest. It does not silently create credentials or activate external connectors.
-
-## Phase 12 — Enterprise Platform
-
-Each Enterprise Tenant has:
-
-- Tenant key, slug and lifecycle status
-- Data region and deployment namespace
-- Row, schema or database isolation policy
-- Agent and concurrent-task quotas
-- Requests-per-minute limit
-- Object-storage bucket and encryption-key reference
-- Retention policy and air-gap mode
-
-BeezaOffice accepts:
+Enforced feature keys include:
 
 ```text
-BEEZA_AUTH_TOKEN     bootstrap / private operator token
-bzsess_...           short-lived OIDC-backed enterprise session
-bzk_...              tenant-scoped machine API key
+core.missions
+collaboration
+meetings
+registry
+scheduler
+evaluation
+sop
+protocol
+runtime.dispatch
+enterprise
+business
+marketplace
+white_label
+backup_dr
+siem
+metrics
+kubernetes
 ```
 
-API keys are displayed once. The database stores only the hash, prefix, tenant, identity, scopes, expiry and rate limit.
-
-Tenant isolation is enforced for Missions, Registry, Collaboration, Dispatch, Protocol events and SOP ledgers.
-
-## Backup, DR and Kubernetes
-
-Backup control-plane records are executed by an approved external runner:
+### Tenant onboarding
 
 ```text
-Backup request
-→ pg_dump + Redis RDB + evidence/configuration copy
-→ checksum
-→ immutable S3/MinIO destination
-→ governed completion callback
-→ restore exercise
+organization
+→ deployment
+→ identity
+→ runtime
+→ governance
+→ backup
+→ verification
+→ go_live
 ```
 
-Scripts:
+Each step records completion, note, actor and timestamp. Production readiness requires completed onboarding, an active license and an active Deployment.
+
+### White label
+
+Each Tenant can configure:
+
+- Product and company name
+- Logo and favicon
+- Primary, accent and background colors
+- Custom domain
+- Support, privacy and terms URLs
+- Locale and outbound email identity
+
+The browser applies the Tenant profile to the title, sidebar identity, logo mark and UI variables. In enforced mode, edits require `white_label` entitlement.
+
+### Deployment activation
+
+Deployment records track:
+
+- Deployment ID and fingerprint
+- Environment, site and hostname
+- Application version and image digest
+- License association
+- Status and heartbeat timestamp
+
+Agent and Deployment registration, licensed features and concurrent work are quota-controlled.
+
+### Signed releases
+
+`.github/workflows/release.yml` runs on `v*` tags and:
+
+1. Builds and pushes the container to GHCR.
+2. Generates SBOM and provenance attestations.
+3. Signs the immutable image digest with Cosign and GitHub OIDC.
+4. Verifies the signature inside the workflow.
+5. Produces a publishable release manifest, checksum and installer command.
+
+The runtime seeds `0.15.0` as `UNSIGNED`. A release becomes `PUBLISHED` only after a verified manifest is registered through:
 
 ```text
-deploy/backup/run-backup.sh
-deploy/backup/restore-backup.sh
+POST /api/commercial/releases/publish
 ```
 
-Kubernetes baseline:
+## Production installer
+
+Files:
 
 ```text
-deploy/k8s/beezaoffice.yaml
+deploy/install/install.sh
+deploy/install/compose.production.yml
 ```
 
-It provides three replicas, rolling updates, probes, PodDisruptionBudget, HPA, non-root/read-only security context, topology spreading and NetworkPolicy. PostgreSQL HA, Redis HA and object storage remain external platform dependencies.
+The installer requires:
 
-## Quick deploy
+- Docker Compose v2
+- Digest-pinned container image
+- Cosign verification unless explicitly bypassed
+- Production license configuration
+
+It generates protected random database, platform and metrics secrets, preserves existing configuration during upgrades, starts durable PostgreSQL/Redis services and waits for `/health/ready`.
+
+Example from a signed release artifact:
+
+```bash
+BEEZA_IMAGE=ghcr.io/paddman/beezaoffice:0.15.0@sha256:... \
+BEEZA_COSIGN_IDENTITY=https://github.com/paddman/Beezaoffice/.github/workflows/release.yml@refs/tags/v0.15.0 \
+BEEZA_LICENSE_PUBLIC_KEY="$(awk '{printf "%s\\n",$0}' beeza-license-public.pem)" \
+BEEZA_LICENSE_TOKEN="$(cat customer-a.jwt)" \
+sh deploy/install/install.sh
+```
+
+The default bind address is `127.0.0.1:8080`; use an approved TLS reverse proxy or ingress for external access.
+
+## Local development
 
 ```bash
 cp .env.example .env
@@ -167,55 +236,50 @@ docker compose -f compose.yml ps
 docker compose -f compose.yml logs -f beezaoffice
 ```
 
-Required production changes:
+The example environment uses `BEEZA_LICENSE_MODE=development` so local development remains usable without a commercial token.
 
-```env
-POSTGRES_PASSWORD=SET_A_STRONG_PASSWORD
-DATABASE_URL=postgresql+psycopg://beeza:THE_SAME_PASSWORD@postgres:5432/beezaoffice
-BEEZA_AUTH_TOKEN=SET_A_LONG_RANDOM_TOKEN
-BEEZA_METRICS_TOKEN=SET_A_SEPARATE_METRICS_TOKEN
-BEEZA_PUBLIC_URL=https://beeza.example.com
-BEEZA_DEFAULT_TENANT=tenant:beeza
+## Commercial API
+
+```text
+GET  /api/commercial/status
+
+GET  /api/commercial/onboarding
+POST /api/commercial/onboarding
+POST /api/commercial/onboarding/{key}/advance
+
+GET  /api/commercial/license
+POST /api/commercial/license/import
+POST /api/commercial/license/verify
+GET  /api/commercial/entitlements
+
+GET /api/commercial/brand
+PUT /api/commercial/brand
+
+GET  /api/commercial/deployments
+POST /api/commercial/deployments
+POST /api/commercial/deployments/{key}/heartbeat
+
+GET  /api/commercial/releases
+POST /api/commercial/releases/publish
+GET  /api/commercial/installer-config
 ```
 
-Business configuration:
-
-```env
-BEEZA_BUSINESS_ENABLED=true
-BEEZA_BUSINESS_INTERVAL_SECONDS=60
-BEEZA_DEFAULT_LABOR_RATE_USD=30
-```
-
-Enterprise storage configuration:
-
-```env
-BEEZA_OBJECT_STORE_ENDPOINT=https://minio.example.com
-BEEZA_OBJECT_STORE_BUCKET=beeza-evidence
-BEEZA_BACKUP_BUCKET=beeza-backups
-BEEZA_BACKUP_ENCRYPTION_KEY_REF=vault://beeza/backup-key
-BEEZA_MCP_ALLOWED_ORIGINS=https://console.example.com
-```
-
-## Executive and Business API
+## Business API
 
 ```text
 GET  /api/business/status
 POST /api/business/sync
-
 GET  /api/business/executive?days=30
 GET  /api/business/departments?days=30
 GET  /api/business/agents?days=30
 GET  /api/business/outcomes
 POST /api/business/outcomes
-
 GET  /api/business/snapshots
 POST /api/business/snapshots
-
 GET  /api/business/plans
 GET  /api/business/billing
 GET  /api/business/usage
 POST /api/business/subscription
-
 GET  /api/business/industry-packs
 POST /api/business/industry-packs/{pack_key}/install
 ```
@@ -226,27 +290,16 @@ POST /api/business/industry-packs/{pack_key}/install
 GET  /api/enterprise/status
 GET  /api/enterprise/tenants
 POST /api/enterprise/tenants
-
 GET  /api/enterprise/identity-providers
 POST /api/enterprise/identity-providers
 POST /api/enterprise/identity-providers/{provider_key}/discover
 POST /enterprise/sso/oidc/exchange
-
 GET    /api/enterprise/api-keys
 POST   /api/enterprise/api-keys
 DELETE /api/enterprise/api-keys/{key_id}
-
-GET  /api/enterprise/sites
 GET  /api/enterprise/backup/plans
-POST /api/enterprise/backup/plans
-GET  /api/enterprise/backup/runs
 POST /api/enterprise/backup/plans/{plan_key}/runs
-POST /api/enterprise/backup/runs/{run_key}/complete
-
-GET  /api/enterprise/siem/sinks
-POST /api/enterprise/siem/sinks
 GET  /api/enterprise/siem/export
-POST /api/enterprise/siem/sinks/{sink_key}/checkpoint
 ```
 
 ## Protocol endpoints
@@ -272,82 +325,30 @@ GET /api/health
 GET /metrics     Authorization: Bearer $BEEZA_METRICS_TOKEN
 ```
 
-Phase 13 Prometheus metrics include:
+Phase 14 metrics include:
 
 ```text
-beeza_business_outcomes_total
-beeza_business_verified_outcomes
-beeza_business_hours_saved
-beeza_business_value_created_usd
-beeza_business_sla_compliance_ratio
-beeza_business_installed_packs
-beeza_business_active_subscriptions
+beeza_commercial_active_licenses
+beeza_commercial_active_deployments
+beeza_commercial_completed_onboarding
+beeza_commercial_published_releases
 ```
 
-Example:
+## Production boundary
 
-```bash
-curl -H "Authorization: Bearer $BEEZA_METRICS_TOKEN" \
-  http://localhost:8080/metrics
-```
-
-## Runtime configuration
-
-```env
-OPENCLAW_BASE_URL=http://openclaw-host:18789
-OPENCLAW_AUTH_TOKEN=
-OPENCLAW_AGENT_TARGET=openclaw/default
-
-CHERRYAGENT_BASE_URL=http://cherryagent-host:8787
-CHERRYAGENT_AUTH_TOKEN=
-
-HERMES_BASE_URL=http://hermes-host:8642
-HERMES_AUTH_TOKEN=
-HERMES_MODEL=hermes-agent
-
-THCLAW_BASE_URL=http://thclaws-host:7878
-THCLAW_AUTH_TOKEN=
-THCLAW_MODEL=
-THCLAW_WORKSPACE_DIR=
-```
-
-## Architecture
-
-```text
-Enterprise Identity / API Key
-        ↓ tenant + quota + rate limit
-Governance and Audit
-        ↓
-Mission / Meeting / Collaboration / SOP / Protocol
-        ↓
-Agent Registry + Intelligent Scheduler
-        ↓
-OpenClaw / CherryAgent / Hermes / thClaws
-        ↓
-Runtime Events + Evidence
-        ↓
-Evaluation + Approval + Replay
-        ↓
-Verified Business Outcome
-        ↓
-Executive KPI / Department / Agent Economics / Billing / SIEM
-```
-
-## Measurement boundary
-
-- Automatically calculated time and cost values are estimates unless manually confirmed.
-- Default estimates use fixed priority baselines, not a baseline derived from the observed completion time.
-- Revenue attribution requires explicit business input.
-- Evaluation quality does not independently prove financial value.
-- Billing output is an estimate, not a legally binding invoice.
-- Industry Packs are governed manifests until their connectors and SOPs are implemented and verified.
-- Production still requires real HA databases, TLS, KMS/Vault, object lock, restore drills, image signing and capacity testing.
+- `development` and `warn` are not production license-enforcement modes.
+- The private signing key must remain offline or inside an approved HSM/KMS signer.
+- Database administrators can alter local data; protect database and audit access.
+- A release manifest does not prove a signature by itself; verify the OCI digest and Cosign identity.
+- Custom domains still require DNS, TLS certificates and ingress configuration.
+- Billing remains an operational estimate, not a legally binding invoice.
+- Automatically calculated business time and cost remain estimates unless manually confirmed.
+- Production still requires HA PostgreSQL/Redis, object lock, restore drills, capacity testing and incident runbooks.
 
 Detailed architecture:
 
 - `docs/PHASE-12-ENTERPRISE-PLATFORM.md`
 - `docs/PHASE-13-EXECUTIVE-BUSINESS.md`
+- `docs/PHASE-14-COMMERCIAL-PRODUCTIZATION.md`
 
-## Next phase
-
-**Phase 14 — Commercial Productization:** tenant onboarding, contract entitlements, license enforcement, white-label branding, pack publishing workflow, signed releases and deployment installer.
+After Phase 14, the numbered build roadmap is complete. The next work is **pilot deployment, real runtime integration, load testing, security review and customer validation**.
