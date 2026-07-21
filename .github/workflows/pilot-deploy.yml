@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       ssh_user:
-        description: SSH user with sudo or /opt/beezaoffice write access
+        description: SSH user with Docker access or passwordless sudo
         required: true
         default: ubuntu
         type: string
@@ -59,20 +59,26 @@ jobs:
             *) echo "Pilot public URL must use HTTPS" >&2; exit 1 ;;
           esac
           test -n "${{ secrets.PILOT_SSH_PRIVATE_KEY }}"
+          test -n "${{ secrets.PILOT_SSH_KNOWN_HOSTS }}"
           test -n "${{ secrets.PILOT_ENV_B64 }}"
 
-      - name: Prepare SSH and protected environment
+      - name: Prepare pinned SSH trust and protected environment
         run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "${{ secrets.PILOT_SSH_PRIVATE_KEY }}" > ~/.ssh/pilot_key
-          chmod 600 ~/.ssh/pilot_key
-          ssh-keyscan -p "$PILOT_PORT" -H "$PILOT_HOST" >> ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.PILOT_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/pilot_key ~/.ssh/known_hosts
+          ssh-keygen -F "$PILOT_HOST" -f ~/.ssh/known_hosts >/dev/null \
+            || ssh-keygen -F "[$PILOT_HOST]:$PILOT_PORT" -f ~/.ssh/known_hosts >/dev/null
           printf '%s' "${{ secrets.PILOT_ENV_B64 }}" | base64 --decode > pilot.env
           chmod 600 pilot.env
+          grep -q '^BEEZA_APP_VERSION=0.16.0$' pilot.env
+          grep -q '^BEEZA_RELEASE_CHANNEL=pilot$' pilot.env
           grep -q '^BEEZA_LICENSE_MODE=enforce$' pilot.env
           grep -q '^BEEZA_LICENSE_TOKEN=.' pilot.env
           grep -q '^BEEZA_LICENSE_PUBLIC_KEY=.' pilot.env
           grep -q '^BEEZA_SCHEMA_STRICT=true$' pilot.env
+          grep -q '^BEEZA_FORCE_HTTPS=true$' pilot.env
 
       - name: Upload installer bundle
         run: |
@@ -93,16 +99,24 @@ jobs:
           set -eu
           command -v docker >/dev/null
           command -v cosign >/dev/null
+          SUDO=""
+          if ! docker info >/dev/null 2>&1 || [ ! -w /opt ]; then
+            sudo -n true >/dev/null
+            SUDO="sudo"
+          fi
           install_dir=/opt/beezaoffice
-          mkdir -p "$install_dir"
-          cp ~/beezaoffice-0.16.0/pilot.env "$install_dir/.env"
-          chmod 600 "$install_dir/.env"
-          export BEEZA_INSTALL_DIR="$install_dir"
-          export BEEZA_IMAGE
-          export BEEZA_COSIGN_IDENTITY
-          export BEEZA_PUBLIC_URL
-          export BEEZA_COSIGN_ISSUER=https://token.actions.githubusercontent.com
-          sh ~/beezaoffice-0.16.0/deploy/install/install.sh
+          $SUDO install -d -m 700 "$install_dir"
+          $SUDO cp ~/beezaoffice-0.16.0/pilot.env "$install_dir/.env"
+          $SUDO chmod 600 "$install_dir/.env"
+          $SUDO env \
+            BEEZA_INSTALL_DIR="$install_dir" \
+            BEEZA_APP_VERSION=0.16.0 \
+            BEEZA_RELEASE_CHANNEL=pilot \
+            BEEZA_IMAGE="$BEEZA_IMAGE" \
+            BEEZA_COSIGN_IDENTITY="$BEEZA_COSIGN_IDENTITY" \
+            BEEZA_COSIGN_ISSUER=https://token.actions.githubusercontent.com \
+            BEEZA_PUBLIC_URL="$BEEZA_PUBLIC_URL" \
+            sh ~/beezaoffice-0.16.0/deploy/install/install.sh
           REMOTE
 
       - name: Verify remote readiness and version
@@ -132,4 +146,4 @@ jobs:
 
       - name: Remove local deployment secrets
         if: always()
-        run: rm -f pilot.env ~/.ssh/pilot_key
+        run: rm -f pilot.env ~/.ssh/pilot_key ~/.ssh/known_hosts
