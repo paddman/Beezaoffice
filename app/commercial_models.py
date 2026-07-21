@@ -68,7 +68,12 @@ class CommercialLicense(Base):
 class FeatureEntitlement(Base):
     __tablename__ = "commercial_feature_entitlements"
     __table_args__ = (
-        UniqueConstraint("tenant_key", "feature_key", name="uq_commercial_tenant_feature"),
+        UniqueConstraint(
+            "tenant_key",
+            "feature_key",
+            "source",
+            name="uq_commercial_tenant_feature_source",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -77,7 +82,7 @@ class FeatureEntitlement(Base):
     feature_key: Mapped[str] = mapped_column(String(140), index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     limit_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    source: Mapped[str] = mapped_column(String(40), default="LICENSE")
+    source: Mapped[str] = mapped_column(String(40), default="LICENSE", index=True)
     source_key: Mapped[str] = mapped_column(String(120), default="")
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
