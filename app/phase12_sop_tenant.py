@@ -3,16 +3,18 @@ from __future__ import annotations
 import re
 from typing import Callable
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 import phase10_app
 import phase12_app
 from enterprise_service import DEFAULT_TENANT, resource_tenant, scope_resource
-from main import app, db_session
+from main import SessionLocal, app, db_session
 from phase6_app import require_governance
-from sop_models import SOPDeriveRequest, SOPTemplateCreate
+from sop_models import SOPTemplateCreate
+
+SOPDeriveRequest = phase10_app.SOPDeriveRequest
 
 
 def remove_route(path: str, method: str) -> None:
@@ -41,7 +43,13 @@ def create_tenant_sop_template(
     db: Session = Depends(db_session),
 ):
     result = _ORIGINAL_CREATE_TEMPLATE(payload=payload, actor=actor, db=db)
-    scope_resource(db, "sop_template", payload.template_key, tenant_key, created_by=actor)
+    scope_resource(
+        db,
+        "sop_template",
+        payload.template_key,
+        tenant_key,
+        created_by=actor,
+    )
     db.commit()
     return {**result, "tenant_key": tenant_key}
 
@@ -56,14 +64,20 @@ def derive_tenant_sop_template(
 ):
     owner = resource_tenant(db, "mission", mission_key) or DEFAULT_TENANT
     if owner != tenant_key:
-        return JSONResponse(status_code=404, content={"detail": "Mission not found"})
+        raise HTTPException(status_code=404, detail="Mission not found")
     result = _ORIGINAL_DERIVE_TEMPLATE(
         mission_key=mission_key,
         payload=payload,
         actor=actor,
         db=db,
     )
-    scope_resource(db, "sop_template", payload.template_key, tenant_key, created_by=actor)
+    scope_resource(
+        db,
+        "sop_template",
+        payload.template_key,
+        tenant_key,
+        created_by=actor,
+    )
     db.commit()
     return {**result, "tenant_key": tenant_key}
 
@@ -85,8 +99,11 @@ async def sop_tenant_ownership(request: Request, call_next: Callable):
 
     key = template_key or version_template_key
     if key:
-        with phase10_app.SessionLocal() as db:
+        with SessionLocal() as db:
             owner = resource_tenant(db, "sop_template", key)
             if owner is not None and owner != tenant_key:
-                return JSONResponse(status_code=404, content={"detail": "SOP template not found"})
+                return JSONResponse(
+                    status_code=404,
+                    content={"detail": "SOP template not found"},
+                )
     return await call_next(request)
