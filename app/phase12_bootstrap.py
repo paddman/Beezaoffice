@@ -19,5 +19,6 @@ phase11_app.create_protocol_task = phase12_runtime.enterprise_create_protocol_ta
 
 import phase12_hardening  # noqa: E402,F401 — OIDC, API-key and tenant ownership checks
 import phase12_isolation  # noqa: E402,F401 — tenant-filtered registries and work ledgers
+import phase12_sop_tenant  # noqa: E402,F401 — tenant-owned SOP authoring and execution
 
 app.version = "0.13.0"
