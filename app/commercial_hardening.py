@@ -17,6 +17,21 @@ if commercial_service.LICENSE_MODE not in {"development", "warn", "enforce"}:
 _original_seed_commercial = commercial_service.seed_commercial
 _original_license_state = commercial_service.license_state
 _original_activate_license = commercial_service.activate_license
+_original_current_license = commercial_service.current_license
+
+
+def hardened_current_license(
+    db: Session,
+    tenant_key: str,
+) -> CommercialLicense | None:
+    row = _original_current_license(db, tenant_key)
+    if (
+        row is not None
+        and row.status == "DEVELOPMENT"
+        and commercial_service.LICENSE_MODE != "development"
+    ):
+        return None
+    return row
 
 
 def hardened_activate_license(
@@ -130,8 +145,8 @@ def effective_feature_contract(
     tenant_key: str,
 ) -> tuple[set[str], dict[str, int], set[str], set[str]]:
     sync_contract_entitlements(db, tenant_key)
-    db.flush()
-    license_row = commercial_service.current_license(db, tenant_key)
+    db.commit()
+    license_row = hardened_current_license(db, tenant_key)
     if license_row is None:
         return set(), {}, set(), set()
     license_features = set(license_row.features or [])
@@ -187,6 +202,14 @@ def contract_entitlement_limit(
 
 def contract_license_state(db: Session, tenant_key: str):
     state = _original_license_state(db, tenant_key)
+    row = hardened_current_license(db, tenant_key)
+    state["valid"] = row is not None
+    state["allowed"] = row is not None or commercial_service.LICENSE_MODE in {
+        "development",
+        "warn",
+    }
+    state["license"] = commercial_service.license_view(row) if row else None
+    state["warning"] = None if row else "No active verified commercial license"
     features, limits, licensed, contracted = effective_feature_contract(db, tenant_key)
     state["licensed_features"] = sorted(licensed)
     state["contract_features"] = sorted(contracted)
@@ -196,11 +219,13 @@ def contract_license_state(db: Session, tenant_key: str):
     return state
 
 
+commercial_service.current_license = hardened_current_license
 commercial_service.activate_license = hardened_activate_license
 commercial_service.seed_commercial = commercial_seed_with_contracts
 commercial_service.entitlement_allowed = contract_entitlement_allowed
 commercial_service.entitlement_limit = contract_entitlement_limit
 commercial_service.license_state = contract_license_state
+phase14_app.current_license = hardened_current_license
 phase14_app.activate_license = hardened_activate_license
 phase14_app.seed_commercial = commercial_seed_with_contracts
 phase14_app.entitlement_allowed = contract_entitlement_allowed
