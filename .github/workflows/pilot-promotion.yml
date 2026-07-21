@@ -21,8 +21,12 @@ on:
         required: true
         default: openclaw,cherryagent,hermes,thclaws
         type: string
-      release_artifact_ref:
-        description: Verified RC image digest/signature evidence reference
+      signed_image:
+        description: Digest-pinned signed RC image deployed to the Pilot
+        required: true
+        type: string
+      cosign_identity:
+        description: Expected GitHub OIDC certificate identity for the RC image
         required: true
         type: string
       customer_name:
@@ -45,6 +49,7 @@ on:
 
 permissions:
   contents: write
+  id-token: read
 
 jobs:
   validate-and-promote:
@@ -56,10 +61,11 @@ jobs:
       TENANT_KEY: ${{ inputs.tenant_key }}
       PILOT_KEY: ${{ inputs.pilot_key }}
       RUNTIMES: ${{ inputs.runtimes }}
+      SIGNED_IMAGE: ${{ inputs.signed_image }}
+      COSIGN_IDENTITY: ${{ inputs.cosign_identity }}
       CUSTOMER_NAME: ${{ inputs.customer_name }}
       CUSTOMER_SIGNOFF_NAME: ${{ inputs.customer_signoff_name }}
       CUSTOMER_SIGNOFF_NOTE: ${{ inputs.customer_signoff_note }}
-      RELEASE_ARTIFACT_REF: ${{ inputs.release_artifact_ref }}
       BEEZA_AUTH_TOKEN: ${{ secrets.PILOT_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -70,28 +76,84 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Require Pilot authentication secret
-        run: test -n "$BEEZA_AUTH_TOKEN"
+      - uses: sigstore/cosign-installer@v4.1.2
 
-      - name: Verify deployed version and existing gates
+      - name: Validate protected Pilot inputs
+        run: |
+          test -n "$BEEZA_AUTH_TOKEN"
+          case "$BASE_URL" in
+            https://*) ;;
+            *) echo "Pilot URL must use HTTPS" >&2; exit 1 ;;
+          esac
+          case "$SIGNED_IMAGE" in
+            *@sha256:????????????????????????????????????????????????????????????????) ;;
+            *) echo "signed_image must be pinned by a full SHA-256 digest" >&2; exit 1 ;;
+          esac
+          test -n "$COSIGN_IDENTITY"
+          test -n "$CUSTOMER_SIGNOFF_NAME"
+          test -n "$CUSTOMER_SIGNOFF_NOTE"
+
+      - name: Cryptographically verify signed RC image
+        run: |
+          cosign verify \
+            --certificate-identity "$COSIGN_IDENTITY" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$SIGNED_IMAGE" \
+            > signed-image-verification.json
+
+      - name: Verify deployed version digest License and existing gates
         run: |
           python - <<'PY'
           import json, os, urllib.request
-          request = urllib.request.Request(
-              f"{os.environ['BASE_URL'].rstrip('/')}/api/pilot/programs/{os.environ['PILOT_KEY']}",
-              headers={
-                  "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
-                  "X-Beeza-Identity": "human:owner",
-                  "X-Beeza-Tenant": os.environ["TENANT_KEY"],
-              },
-          )
-          with urllib.request.urlopen(request, timeout=30) as response:
-              data = json.load(response)
-          assert data["pilot"]["target_version"] == "0.16.0", data
-          blocked = [g for g in data["gates"] if g["status"] in {"FAIL", "BLOCKED"}]
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          headers = {
+              "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
+              "X-Beeza-Identity": "human:owner",
+              "X-Beeza-Tenant": os.environ["TENANT_KEY"],
+          }
+
+          def read(path):
+              request = urllib.request.Request(base + path, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          pilot = read(f"/api/pilot/programs/{os.environ['PILOT_KEY']}")
+          commercial = read("/api/commercial/status")
+          signed_digest = os.environ["SIGNED_IMAGE"].rsplit("@", 1)[1]
+
+          assert pilot["pilot"]["target_version"] == "0.16.0", pilot
+          blocked = [gate for gate in pilot["gates"] if gate["status"] in {"FAIL", "BLOCKED"}]
           assert not blocked, blocked
+
+          assert commercial["version"] == "0.16.0", commercial
+          assert commercial["license"]["mode"] == "enforce", commercial
+          assert commercial["license"]["valid"] is True, commercial
+          active = [
+              deployment
+              for deployment in commercial.get("deployments", [])
+              if deployment.get("status") == "ACTIVE"
+          ]
+          matching = [
+              deployment
+              for deployment in active
+              if deployment.get("version") == "0.16.0"
+              and deployment.get("image_digest") == signed_digest
+          ]
+          assert matching, {
+              "expected_digest": signed_digest,
+              "active_deployments": active,
+          }
+
+          evidence = {
+              "pilot": pilot,
+              "commercial": commercial,
+              "signed_image": os.environ["SIGNED_IMAGE"],
+              "cosign_identity": os.environ["COSIGN_IDENTITY"],
+              "matching_deployments": matching,
+          }
           with open("pilot-before.json", "w", encoding="utf-8") as handle:
-              json.dump(data, handle, indent=2, sort_keys=True)
+              json.dump(evidence, handle, indent=2, sort_keys=True)
           PY
 
       - name: Record verified signed RC release
@@ -103,9 +165,10 @@ jobs:
             --pilot-key "$PILOT_KEY" \
             --gate release_signed \
             --status PASS \
-            --source SIGNED_RC_INSTALL \
-            --summary "Pilot image digest and Cosign identity were verified before deployment" \
-            --artifact-ref "$RELEASE_ARTIFACT_REF"
+            --source COSIGN_VERIFIED_RC \
+            --summary "Cosign signature verified and deployed 0.16.0 image digest matched the active Deployment" \
+            --report signed-image-verification.json \
+            --artifact-ref "$SIGNED_IMAGE"
 
       - name: Run real Runtime end-to-end verification
         run: |
@@ -179,8 +242,10 @@ jobs:
           with urllib.request.urlopen(request, timeout=30) as response:
               data = json.load(response)
           incomplete = [
-              gate["gate_key"] for gate in data["gates"]
-              if gate["gate_key"] != "customer_acceptance" and gate["status"] != "PASS"
+              gate["gate_key"]
+              for gate in data["gates"]
+              if gate["gate_key"] != "customer_acceptance"
+              and gate["status"] != "PASS"
           ]
           assert not incomplete, f"Incomplete pre-customer gates: {incomplete}"
           PY
@@ -244,6 +309,7 @@ jobs:
         with:
           name: beezaoffice-0.16.0-real-pilot
           path: |
+            signed-image-verification.json
             pilot-before.json
             real-runtime-e2e.json
             production-security-review.json
