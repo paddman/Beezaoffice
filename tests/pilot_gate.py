@@ -47,7 +47,10 @@ def api(
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = response.read().decode()
             body = json.loads(raw) if raw else None
-            return response.status, body, dict(response.headers.items())
+            response_headers = {
+                key.casefold(): value for key, value in response.headers.items()
+            }
+            return response.status, body, response_headers
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode()
         try:
@@ -132,8 +135,8 @@ def assert_tenant_isolation(base_url: str, mission_a: str, mission_b: str) -> No
     assert mission_b not in keys_a, (mission_b, keys_a)
     assert mission_b in keys_b, (mission_b, keys_b)
     assert mission_a not in keys_b, (mission_a, keys_b)
-    assert headers_a.get("X-Beeza-Tenant") == DEFAULT_TENANT
-    assert headers_b.get("X-Beeza-Tenant") == SECOND_TENANT
+    assert headers_a.get("x-beeza-tenant") == DEFAULT_TENANT, headers_a
+    assert headers_b.get("x-beeza-tenant") == SECOND_TENANT, headers_b
 
     try:
         api(base_url, "GET", f"/api/missions/{mission_b}")
