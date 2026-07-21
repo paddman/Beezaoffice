@@ -133,7 +133,7 @@ log "Applying versioned Alembic migrations"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm beezaoffice \
   alembic -c alembic.ini upgrade head
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm beezaoffice \
-  alembic -c alembic.ini current --check-heads
+  python -c "from main import engine; from schema_service import schema_status; s=schema_status(engine); print(s); assert s['up_to_date']"
 
 log "Starting BeezaOffice"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d beezaoffice --remove-orphans
