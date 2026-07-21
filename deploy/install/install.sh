@@ -11,6 +11,10 @@ BEEZA_APP_VERSION="${BEEZA_APP_VERSION:-0.16.0}"
 BEEZA_RELEASE_CHANNEL="${BEEZA_RELEASE_CHANNEL:-pilot}"
 BEEZA_IMAGE="${BEEZA_IMAGE:-ghcr.io/paddman/beezaoffice:0.16.0}"
 BEEZA_LICENSE_MODE="${BEEZA_LICENSE_MODE:-enforce}"
+BEEZA_SCHEMA_STRICT="${BEEZA_SCHEMA_STRICT:-true}"
+BEEZA_MAX_REQUEST_BYTES="${BEEZA_MAX_REQUEST_BYTES:-2097152}"
+BEEZA_FORCE_HTTPS="${BEEZA_FORCE_HTTPS:-true}"
+BEEZA_PILOT_RATE_LIMIT_PER_MINUTE="${BEEZA_PILOT_RATE_LIMIT_PER_MINUTE:-120000}"
 BEEZA_SKIP_SIGNATURE_VERIFY="${BEEZA_SKIP_SIGNATURE_VERIFY:-false}"
 BEEZA_ALLOW_UNPINNED_IMAGE="${BEEZA_ALLOW_UNPINNED_IMAGE:-false}"
 
@@ -61,10 +65,26 @@ fingerprint_text() {
   fi
 }
 
-append_default() {
+set_env_value() {
   key="$1"
   value="$2"
-  grep -q "^${key}=" "$ENV_FILE" || printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  temporary="${ENV_FILE}.tmp"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { written = 0 }
+    index($0, key "=") == 1 {
+      if (!written) {
+        print key "=" value
+        written = 1
+      }
+      next
+    }
+    { print }
+    END {
+      if (!written) print key "=" value
+    }
+  ' "$ENV_FILE" > "$temporary"
+  mv "$temporary" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
 }
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -78,6 +98,7 @@ APP_PORT=${APP_PORT:-8080}
 BEEZA_BIND_ADDRESS=${BEEZA_BIND_ADDRESS:-127.0.0.1}
 BEEZA_APP_VERSION=${BEEZA_APP_VERSION}
 BEEZA_RELEASE_CHANNEL=${BEEZA_RELEASE_CHANNEL}
+BEEZA_PILOT_RATE_LIMIT_PER_MINUTE=${BEEZA_PILOT_RATE_LIMIT_PER_MINUTE}
 BEEZA_IMAGE=${BEEZA_IMAGE}
 
 POSTGRES_DB=beezaoffice
@@ -98,10 +119,10 @@ BEEZA_LICENSE_ALGORITHMS=${BEEZA_LICENSE_ALGORITHMS:-EdDSA,RS256,ES256}
 BEEZA_LICENSE_PUBLIC_KEY=${BEEZA_LICENSE_PUBLIC_KEY:-}
 BEEZA_LICENSE_TOKEN=${BEEZA_LICENSE_TOKEN:-}
 
-BEEZA_SCHEMA_STRICT=true
+BEEZA_SCHEMA_STRICT=${BEEZA_SCHEMA_STRICT}
 BEEZA_GOVERNANCE_ENFORCED=true
-BEEZA_MAX_REQUEST_BYTES=${BEEZA_MAX_REQUEST_BYTES:-2097152}
-BEEZA_FORCE_HTTPS=${BEEZA_FORCE_HTTPS:-true}
+BEEZA_MAX_REQUEST_BYTES=${BEEZA_MAX_REQUEST_BYTES}
+BEEZA_FORCE_HTTPS=${BEEZA_FORCE_HTTPS}
 BEEZA_BUSINESS_ENABLED=true
 BEEZA_BUSINESS_INTERVAL_SECONDS=60
 BEEZA_DEFAULT_LABOR_RATE_USD=30
@@ -115,12 +136,15 @@ BEEZA_PROTOCOL_ENABLED=true
 EOF
   log "Created protected environment file at $ENV_FILE"
 else
-  log "Preserving existing environment file at $ENV_FILE"
-  append_default BEEZA_APP_VERSION "$BEEZA_APP_VERSION"
-  append_default BEEZA_RELEASE_CHANNEL "$BEEZA_RELEASE_CHANNEL"
-  append_default BEEZA_SCHEMA_STRICT true
-  append_default BEEZA_MAX_REQUEST_BYTES 2097152
-  append_default BEEZA_FORCE_HTTPS true
+  log "Preserving secrets and updating release-controlled values in $ENV_FILE"
+  set_env_value BEEZA_APP_VERSION "$BEEZA_APP_VERSION"
+  set_env_value BEEZA_RELEASE_CHANNEL "$BEEZA_RELEASE_CHANNEL"
+  set_env_value BEEZA_PILOT_RATE_LIMIT_PER_MINUTE "$BEEZA_PILOT_RATE_LIMIT_PER_MINUTE"
+  set_env_value BEEZA_IMAGE "$BEEZA_IMAGE"
+  set_env_value BEEZA_LICENSE_MODE "$BEEZA_LICENSE_MODE"
+  set_env_value BEEZA_SCHEMA_STRICT "$BEEZA_SCHEMA_STRICT"
+  set_env_value BEEZA_MAX_REQUEST_BYTES "$BEEZA_MAX_REQUEST_BYTES"
+  set_env_value BEEZA_FORCE_HTTPS "$BEEZA_FORCE_HTTPS"
 fi
 
 if [ "$BEEZA_LICENSE_MODE" = "enforce" ]; then
