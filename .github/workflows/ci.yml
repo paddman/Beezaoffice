@@ -31,6 +31,8 @@ jobs:
           app/phase9_runtime.py
           app/phase10_app.py
           app/phase10_runtime.py
+          app/phase11_app.py
+          app/phase11_runtime.py
           app/collaboration_models.py
           app/collaboration_service.py
           app/meeting_models.py
@@ -49,6 +51,8 @@ jobs:
           app/sop_models.py
           app/sop_service.py
           app/sop_hardening.py
+          app/protocol_models.py
+          app/protocol_service.py
           app/runtime_adapters.py
       - name: Check browser JavaScript
         run: |
@@ -62,8 +66,9 @@ jobs:
           node --check app/static/phase8.js
           node --check app/static/phase9.js
           node --check app/static/phase10.js
+          node --check app/static/phase11.js
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
-      - name: Smoke-test Phase 10 SOP runtime
+      - name: Smoke-test Phase 11 protocol gateway
         run: |
-          docker run --rm beezaoffice:test python -c "from phase10_runtime import app; from sop_models import SOPDefinition, SOPNodeDefinition, SOPTemplate, SOPVersion, SOPRun, SOPNodeRun; from sop_service import canonical_checksum, validate_definition, topological_order; from sop_hardening import hardened_sync_task_node, fair_sop_tick; from governance_service import permission_for_request, EXECUTION_ACTIONS; definition=SOPDefinition(nodes=[SOPNodeDefinition(key='collect', title='Collect evidence', objective='Collect enough verified evidence for the requested change.', verification_required=True), SOPNodeDefinition(key='approve', title='Approve change', node_type='APPROVAL', depends_on=['collect'], objective='Approve the evidence-backed change.', verification_required=False), SOPNodeDefinition(key='execute', title='Execute change', depends_on=['approve'], objective='Execute the approved change and preserve verification evidence.', verification_required=True)]); checked=validate_definition(definition); assert app.version == '0.11.0'; assert SOPTemplate.__tablename__ == 'sop_templates'; assert SOPVersion.__tablename__ == 'sop_versions'; assert SOPRun.__tablename__ == 'sop_runs'; assert SOPNodeRun.__tablename__ == 'sop_node_runs'; assert topological_order(checked) == ['collect','approve','execute']; assert canonical_checksum({'b':2,'a':1}) == canonical_checksum({'a':1,'b':2}); assert callable(hardened_sync_task_node) and callable(fair_sop_tick); assert permission_for_request('POST', '/api/sop/templates/demo/runs') == 'sop:run'; assert permission_for_request('POST', '/api/sop/runs/RUN-1/nodes/approve/decision') == 'sop:approve'; assert 'sop:run' in EXECUTION_ACTIONS and 'sop:approve' in EXECUTION_ACTIONS"
+          docker run --rm beezaoffice:test python -c "from phase11_runtime import app; from phase11_app import agent_card, mcp_tools, A2A_VERSION, MCP_PROTOCOL_VERSION; from protocol_models import ProtocolTask, ProtocolEvent, WebhookReceipt, A2ASendRequest; from protocol_service import COLLAB_TO_A2A_STATE, webhook_digest; from governance_service import permission_for_request, EXECUTION_ACTIONS; sample=A2ASendRequest.model_validate({'message':{'messageId':'m1','role':'ROLE_USER','parts':[{'text':'Investigate service latency and return verified evidence.'}]},'configuration':{'returnImmediately':True}}); card=agent_card(True); assert app.version == '0.12.0'; assert ProtocolTask.__tablename__ == 'protocol_tasks'; assert ProtocolEvent.__tablename__ == 'protocol_events'; assert WebhookReceipt.__tablename__ == 'protocol_webhook_receipts'; assert sample.configuration.returnImmediately is True; assert card['protocolVersion'] == '1.0' and card['capabilities']['streaming'] is True; assert A2A_VERSION == '1.0' and MCP_PROTOCOL_VERSION == '2025-06-18'; assert len(mcp_tools()) == 4; assert COLLAB_TO_A2A_STATE['COMPLETED'] == 'TASK_STATE_COMPLETED'; assert len(webhook_digest(b'beeza')) == 64; assert permission_for_request('POST', '/api/protocol/tick') == 'protocol:operate'; assert 'protocol:use' in EXECUTION_ACTIONS"
