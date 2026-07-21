@@ -75,21 +75,42 @@ def run() -> None:
         else:
             raise AssertionError("Deployment-bound license validation did not fail")
 
-        unsupported = jwt.encode(
+        escalated_feature = jwt.encode(
             {
                 **claims,
                 "jti": f"LIC-TEST-{uuid4().hex[:12].upper()}",
-                "features": ["unsupported.feature"],
+                "plan_key": "plan:team",
+                "features": ["white_label"],
+                "limits": commercial_service.PLAN_LIMITS["plan:team"],
             },
             private_pem,
             algorithm="EdDSA",
         )
         try:
-            strict_verify_license_token(unsupported)
+            strict_verify_license_token(escalated_feature)
         except ValueError as exc:
-            assert "unsupported" in str(exc)
+            assert "exceed" in str(exc)
         else:
-            raise AssertionError("Unsupported feature validation did not fail")
+            raise AssertionError("Plan feature escalation did not fail")
+
+        escalated_limit = jwt.encode(
+            {
+                **claims,
+                "jti": f"LIC-TEST-{uuid4().hex[:12].upper()}",
+                "limits": {
+                    **commercial_service.PLAN_LIMITS["plan:enterprise"],
+                    "max_agents": 999999,
+                },
+            },
+            private_pem,
+            algorithm="EdDSA",
+        )
+        try:
+            strict_verify_license_token(escalated_limit)
+        except ValueError as exc:
+            assert "invalid" in str(exc)
+        else:
+            raise AssertionError("Plan quota escalation did not fail")
     finally:
         commercial_service.LICENSE_PUBLIC_KEY = original["public_key"]
         commercial_service.LICENSE_ISSUER = original["issuer"]
