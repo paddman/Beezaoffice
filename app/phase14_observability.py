@@ -6,13 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from business_models import IndustryPack, OutcomeRecord, PackInstallation, TenantSubscription
-from commercial_models import (
-    CommercialLicense,
-    DeploymentActivation,
-    ReleaseManifest,
-    TenantOnboarding,
-)
-from commercial_service import DEPLOYMENT_ID, LICENSE_MODE
+from commercial_models import DeploymentActivation, ReleaseManifest, TenantOnboarding
+from commercial_service import DEPLOYMENT_ID, LICENSE_MODE, current_license
 from enterprise_models import EnterpriseTenant
 from main import Mission, RuntimeConnector, RuntimeDispatch, app, db_session, engine, redis_client
 from phase13_observability import require_metrics_token
@@ -33,6 +28,26 @@ def remove_route(path: str, method: str) -> None:
 
 remove_route("/api/health", "GET")
 remove_route("/metrics", "GET")
+
+
+def active_license_count(db: Session) -> int:
+    tenant_keys = list(
+        db.scalars(
+            select(EnterpriseTenant.tenant_key).where(
+                EnterpriseTenant.status == "ACTIVE"
+            )
+        ).all()
+    )
+    return sum(current_license(db, tenant_key) is not None for tenant_key in tenant_keys)
+
+
+def deployment_license(db: Session):
+    deployment = db.scalar(
+        select(DeploymentActivation).where(
+            DeploymentActivation.deployment_id == DEPLOYMENT_ID
+        )
+    )
+    return current_license(db, deployment.tenant_key) if deployment else None
 
 
 @app.get(
@@ -83,11 +98,7 @@ def prometheus_commercial_metrics(db: Session = Depends(db_session)) -> str:
             TenantSubscription.status == "ACTIVE"
         )
     ) or 0
-    active_licenses = db.scalar(
-        select(func.count(CommercialLicense.id)).where(
-            CommercialLicense.status.in_(["ACTIVE", "DEVELOPMENT"])
-        )
-    ) or 0
+    active_licenses = active_license_count(db)
     active_deployments = db.scalar(
         select(func.count(DeploymentActivation.id)).where(
             DeploymentActivation.status == "ACTIVE"
@@ -142,7 +153,7 @@ def prometheus_commercial_metrics(db: Session = Depends(db_session)) -> str:
             "# HELP beeza_business_active_subscriptions Active tenant subscriptions.",
             "# TYPE beeza_business_active_subscriptions gauge",
             f"beeza_business_active_subscriptions {subscriptions}",
-            "# HELP beeza_commercial_active_licenses Active signed or development licenses.",
+            "# HELP beeza_commercial_active_licenses Currently valid commercial licenses.",
             "# TYPE beeza_commercial_active_licenses gauge",
             f"beeza_commercial_active_licenses {active_licenses}",
             "# HELP beeza_commercial_active_deployments Activated commercial deployments.",
@@ -177,12 +188,7 @@ def phase14_health(db: Session = Depends(db_session)) -> dict[str, object]:
     )
     worker = redis_client.hgetall("beezaoffice:business-worker")
     business_worker = worker.get("status", "starting")
-    active_license = db.scalar(
-        select(CommercialLicense).where(
-            CommercialLicense.deployment_id == DEPLOYMENT_ID,
-            CommercialLicense.status.in_(["ACTIVE", "DEVELOPMENT"]),
-        )
-    )
+    active_license = deployment_license(db)
     signed_release = db.scalar(
         select(ReleaseManifest).where(ReleaseManifest.status == "PUBLISHED").limit(1)
     )
