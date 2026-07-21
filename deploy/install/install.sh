@@ -50,6 +50,14 @@ random_hex() {
   fi
 }
 
+fingerprint_text() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    openssl dgst -sha256 | awk '{print $NF}'
+  fi
+}
+
 if [ ! -f "$ENV_FILE" ]; then
   POSTGRES_PASSWORD="$(random_hex 24)"
   AUTH_TOKEN="$(random_hex 32)"
@@ -118,6 +126,61 @@ until docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T beezaoffi
   }
   sleep 3
 done
+
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+INSTALL_HOSTNAME="$(hostname)"
+INSTALL_FINGERPRINT="$(printf '%s' "${BEEZA_DEPLOYMENT_ID}:${INSTALL_HOSTNAME}" | fingerprint_text)"
+case "$BEEZA_IMAGE" in
+  *@sha256:*) INSTALL_DIGEST="${BEEZA_IMAGE##*@}" ;;
+  *) INSTALL_DIGEST="" ;;
+esac
+
+log "Registering deployment fingerprint and verified image digest"
+if ! docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T \
+  -e BEEZA_INSTALL_HOSTNAME="$INSTALL_HOSTNAME" \
+  -e BEEZA_INSTALL_FINGERPRINT="$INSTALL_FINGERPRINT" \
+  -e BEEZA_INSTALL_IMAGE_DIGEST="$INSTALL_DIGEST" \
+  beezaoffice python - <<'PY'
+import json
+import os
+import urllib.error
+import urllib.request
+
+payload = {
+    "deployment_id": os.environ["BEEZA_DEPLOYMENT_ID"],
+    "fingerprint": os.environ["BEEZA_INSTALL_FINGERPRINT"],
+    "environment": "production",
+    "hostname": os.environ["BEEZA_INSTALL_HOSTNAME"],
+    "site": "primary",
+    "version": "0.15.0",
+    "image_digest": os.environ.get("BEEZA_INSTALL_IMAGE_DIGEST", ""),
+    "metadata": {"registered_by": "production-installer"},
+}
+request = urllib.request.Request(
+    "http://127.0.0.1:8080/api/commercial/deployments",
+    method="POST",
+    data=json.dumps(payload).encode(),
+    headers={
+        "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
+        "X-Beeza-Identity": "human:owner",
+        "X-Beeza-Tenant": os.environ.get("BEEZA_DEFAULT_TENANT", "tenant:beeza"),
+        "X-Beeza-Risk-Level": "LOW",
+        "Content-Type": "application/json",
+    },
+)
+try:
+    with urllib.request.urlopen(request, timeout=15) as response:
+        print(response.read().decode())
+except urllib.error.HTTPError as exc:
+    print(exc.read().decode())
+    raise
+PY
+then
+  log "WARNING: deployment registration failed; review Governance approval and Commercial status before go-live"
+fi
 
 log "BeezaOffice is ready"
 log "Install directory: $INSTALL_DIR"
