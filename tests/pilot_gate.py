@@ -82,7 +82,7 @@ def wait_ready(base_url: str, timeout_seconds: int = 180) -> dict[str, Any]:
     raise RuntimeError(f"BeezaOffice did not become ready: {last_error}")
 
 
-def ensure_second_tenant(base_url: str) -> None:
+def ensure_second_tenant(base_url: str, secondary_license_token: str | None) -> None:
     try:
         api(
             base_url,
@@ -102,6 +102,16 @@ def ensure_second_tenant(base_url: str) -> None:
     except ApiError as exc:
         if exc.status != 409:
             raise
+    if secondary_license_token:
+        _, imported, _ = api(
+            base_url,
+            "POST",
+            "/api/commercial/license/import",
+            tenant=SECOND_TENANT,
+            payload={"token": secondary_license_token},
+        )
+        assert imported.get("tenant_key") == SECOND_TENANT, imported
+        assert imported.get("status") == "ACTIVE", imported
 
 
 def create_mission(base_url: str, tenant: str, suffix: str) -> str:
@@ -187,9 +197,14 @@ def assert_release_and_pilot(base_url: str, expected_license_mode: str) -> dict[
     return pilot
 
 
-def prepare(base_url: str, state_path: Path, expected_license_mode: str) -> None:
+def prepare(
+    base_url: str,
+    state_path: Path,
+    expected_license_mode: str,
+    secondary_license_token: str | None,
+) -> None:
     schema = assert_schema(base_url)
-    ensure_second_tenant(base_url)
+    ensure_second_tenant(base_url, secondary_license_token)
     mission_a = create_mission(base_url, DEFAULT_TENANT, "A")
     mission_b = create_mission(base_url, SECOND_TENANT, "B")
     assert_tenant_isolation(base_url, mission_a, mission_b)
@@ -237,10 +252,16 @@ def main() -> None:
         choices=["development", "warn", "enforce"],
         default="development",
     )
+    parser.add_argument("--secondary-license-token-file", default="")
     args = parser.parse_args()
     state_path = Path(args.state).resolve()
+    secondary_token = None
+    if args.secondary_license_token_file:
+        secondary_token = Path(args.secondary_license_token_file).read_text(encoding="utf-8").strip()
+    if args.expected_license_mode == "enforce" and args.mode == "prepare" and not secondary_token:
+        raise SystemExit("--secondary-license-token-file is required for enforce-mode Tenant isolation")
     if args.mode == "prepare":
-        prepare(args.base_url, state_path, args.expected_license_mode)
+        prepare(args.base_url, state_path, args.expected_license_mode, secondary_token)
     else:
         verify(args.base_url, state_path, args.expected_license_mode)
 
