@@ -20,6 +20,16 @@ services:
       timeout: 3s
       retries: 40
 
+  mock-runtime:
+    image: ${BEEZA_IMAGE:-beezaoffice:pilot}
+    command: ["uvicorn", "pilot_mock_runtime:app", "--host", "0.0.0.0", "--port", "8090"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+
   beezaoffice:
     image: ${BEEZA_IMAGE:-beezaoffice:pilot}
     environment:
@@ -50,21 +60,23 @@ services:
       BEEZA_EVALUATOR_ENABLED: ${BEEZA_EVALUATOR_ENABLED:-false}
       BEEZA_SOP_ENABLED: ${BEEZA_SOP_ENABLED:-false}
       BEEZA_PROTOCOL_ENABLED: ${BEEZA_PROTOCOL_ENABLED:-false}
-      OPENCLAW_BASE_URL: ${OPENCLAW_BASE_URL:-}
-      OPENCLAW_AUTH_TOKEN: ${OPENCLAW_AUTH_TOKEN:-}
+      OPENCLAW_BASE_URL: ${OPENCLAW_BASE_URL:-http://mock-runtime:8090}
+      OPENCLAW_AUTH_TOKEN: ${OPENCLAW_AUTH_TOKEN:-pilot-runtime-token}
       OPENCLAW_AGENT_TARGET: ${OPENCLAW_AGENT_TARGET:-openclaw/default}
-      CHERRYAGENT_BASE_URL: ${CHERRYAGENT_BASE_URL:-}
-      CHERRYAGENT_AUTH_TOKEN: ${CHERRYAGENT_AUTH_TOKEN:-}
-      HERMES_BASE_URL: ${HERMES_BASE_URL:-}
-      HERMES_AUTH_TOKEN: ${HERMES_AUTH_TOKEN:-}
+      CHERRYAGENT_BASE_URL: ${CHERRYAGENT_BASE_URL:-http://mock-runtime:8090}
+      CHERRYAGENT_AUTH_TOKEN: ${CHERRYAGENT_AUTH_TOKEN:-pilot-runtime-token}
+      HERMES_BASE_URL: ${HERMES_BASE_URL:-http://mock-runtime:8090}
+      HERMES_AUTH_TOKEN: ${HERMES_AUTH_TOKEN:-pilot-runtime-token}
       HERMES_MODEL: ${HERMES_MODEL:-hermes-agent}
-      THCLAW_BASE_URL: ${THCLAW_BASE_URL:-}
-      THCLAW_AUTH_TOKEN: ${THCLAW_AUTH_TOKEN:-}
-      THCLAW_MODEL: ${THCLAW_MODEL:-}
+      THCLAW_BASE_URL: ${THCLAW_BASE_URL:-http://mock-runtime:8090}
+      THCLAW_AUTH_TOKEN: ${THCLAW_AUTH_TOKEN:-pilot-runtime-token}
+      THCLAW_MODEL: ${THCLAW_MODEL:-pilot-runtime}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      mock-runtime:
         condition: service_healthy
     ports:
       - "127.0.0.1:18080:8080"
