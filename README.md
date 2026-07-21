@@ -2,16 +2,16 @@
 
 **AI Workforce Operating System** for operating an organization of 10–1,000 governed AI agents.
 
-BeezaOffice is an operations-first command center where agents receive missions, collaborate across runtimes, hold structured meetings, route work intelligently, preserve evidence, verify results, turn successful work into versioned SOPs and report accountable outcomes to humans.
+BeezaOffice is an operations-first command center where agents receive missions, collaborate across runtimes, hold structured meetings, route work intelligently, preserve evidence, verify results, turn successful work into versioned SOPs and expose accountable work through standard agent protocols.
 
 ## Current system
 
-- FastAPI control plane
+- FastAPI control and protocol plane
 - PostgreSQL durable state
-- Redis worker coordination and locks
+- Redis workers, cursors and distributed locks
 - Docker Compose deployment
 - OpenClaw, CherryAgent, Hermes Agent and thClaws Runtime Mesh
-- Mission queue, War Room, live event feed and approval surfaces
+- Mission queue, War Room, live events, approvals and audit
 
 ### Phase 2 — Runtime Control
 
@@ -24,16 +24,15 @@ BeezaOffice is an operations-first command center where agents receive missions,
 - Durable runtime events
 - Server-side synchronization
 - Mission-scoped SSE
-- CherryAgent task, handoff, evidence and log capture
-- Hermes status, approval, result and usage capture
+- CherryAgent and Hermes event capture
 
 ### Phase 4 — Collaboration Bus
 
-- Typed cross-runtime handoffs and work contracts
-- Task dependencies and automatic unblocking
-- Agent/runtime mailbox
-- Result return, human review, revision and retry
-- Follow-up watchdog, deadlines and escalation
+- Typed cross-runtime handoffs
+- Work contracts and dependencies
+- Runtime mailbox
+- Human review, revision and retry
+- Follow-up watchdog and escalation
 
 ### Phase 5 — Agent Meeting Manager
 
@@ -41,67 +40,72 @@ BeezaOffice is an operations-first command center where agents receive missions,
 - Turn-based discussion across runtimes
 - Bounded rounds
 - Human decision gate
-- Accepted decisions converted into Collaboration Bus action items
+- Decisions converted into action items
 
 ### Phase 6 — Governance and Identity
 
 - Human, agent, service and runtime identities
 - Scoped RBAC
-- Data-clearance enforcement
-- Risk and cost-aware policies
-- Independent second-person approval
+- Data clearance
+- Risk and cost-aware policy
+- Independent approval
 - Per-identity budgets
 - Emergency execution kill switch
-- SHA-256 hash-chained audit ledger
-- Enforcement at HTTP and internal runtime-dispatch boundaries
+- Hash-chained audit ledger
 
 ### Phase 7 — Agent Registry and Organization Graph
 
-- Governed directory designed for 1,000 logical agents
-- Department and manager reporting lines
+- Directory designed for 1,000 logical agents
+- Department and manager graph
 - Lifecycle, availability and heartbeat
-- Preferred runtime and model
+- Runtime/model preference
 - Concurrency, workload and capacity
-- Reliability and run history
-- Skills, capabilities, tools and clearance
-- Organization graph, skill matrix and delegation
+- Reliability, skills, capabilities and tools
+- Delegation
 
 ### Phase 8 — Scheduler and Intelligent Router
 
-- Smart tasks without a named agent or runtime
-- Eligibility filtering by lifecycle, clearance, capacity and cost
-- Weighted routing by skill, reliability, capacity, runtime health, latency, cost, deadline and affinity
+- Smart tasks without a named agent
+- Eligibility filtering
+- Explainable weighted routing
 - Runtime-pool capacity
-- Explainable routing decisions
-- Route simulation
-- Backpressure, retry and automatic failover
-- Safe rerouting that refuses duplicate active execution
+- Cost and deadline awareness
+- Retry, backpressure and failover
+- Safe reroute controls
 
 ### Phase 9 — Evaluation, Verification and Replay
 
-- Deterministic evidence-quality evaluation
+- Evidence-quality evaluation
 - Acceptance-criteria coverage
-- Supporting evidence and runtime provenance
-- Completeness, consistency, reproducibility and risk scores
+- Runtime provenance
+- Completeness, consistency and reproducibility checks
 - `PASS`, `WARN` and `FAIL`
-- Failed auto-completions reopened for review
-- Controlled `SAME`, `REROUTE` and `FAILOVER` replay
-- Original/replay score comparison
+- Controlled replay and score comparison
 - Verified quality blended into Registry reliability
 
 ### Phase 10 — SOP Builder and Workflow Templates
 
-- Draft, published and deprecated SOP lifecycle
-- Immutable version definitions with canonical SHA-256 checksum
-- Dependency-graph validation and cycle detection
-- JSON input schemas and bounded variable rendering
+- Draft, published and deprecated lifecycle
+- Immutable checksummed versions
+- Dependency graph and cycle validation
 - Task and human-approval nodes
-- Automatic Scheduler and Collaboration Bus integration
-- Phase 9 verification gate before a node is trusted
-- Reverse-order compensation tasks when later work fails
-- Governed run, approval, publication and cancellation permissions
-- Derive a draft from `PASS`-verified mission tasks
-- Seeded Verified Incident Response and Daily Operations Brief procedures
+- Scheduler and Collaboration integration
+- Phase 9 verification gates
+- Reverse-order compensation work
+- Derive draft SOPs from `PASS`-verified missions
+
+### Phase 11 — Protocol Gateway
+
+- A2A 1.0 HTTP+JSON ingress
+- Public and extended Agent Cards
+- A2A task send, list, poll, cancel and SSE subscribe
+- MCP `2025-06-18` stateless JSON-RPC tools subset
+- OpenAI-compatible Chat Completions ingress
+- Bearer or HMAC webhook task/SOP triggers
+- Durable protocol event stream
+- Idempotent external requests and webhook receipts
+- Protocol task mapping to Mission and Collaboration Task
+- Governance enforcement and audit on external execution
 
 BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and local approval policies.
 
@@ -110,6 +114,7 @@ BeezaOffice remains the command and governance plane. Connected runtimes keep th
 ```bash
 cp .env.example .env
 # Set strong PostgreSQL and BeezaOffice credentials.
+# Set BEEZA_PUBLIC_URL to the externally reachable HTTPS origin.
 # Configure only the runtimes that will be used.
 docker compose -f compose.yml up -d --build
 ```
@@ -117,21 +122,21 @@ docker compose -f compose.yml up -d --build
 Open:
 
 - Command Center: `http://localhost:8080`
-- API health: `http://localhost:8080/api/health`
+- Health: `http://localhost:8080/api/health`
 - API docs: `http://localhost:8080/docs`
-- Runtime worker: `http://localhost:8080/api/runtime-event-worker`
-- Collaboration worker: `http://localhost:8080/api/collaboration/worker`
-- Meeting worker: `http://localhost:8080/api/meeting-worker`
-- Governance: `http://localhost:8080/api/governance/context`
-- Agent Registry: `http://localhost:8080/api/registry/stats`
-- Scheduler: `http://localhost:8080/api/scheduler/status`
-- Evaluator: `http://localhost:8080/api/evaluation/status`
+- Protocol status: `http://localhost:8080/api/protocol/status`
+- Public Agent Card: `http://localhost:8080/.well-known/agent-card.json`
 - SOP engine: `http://localhost:8080/api/sop/status`
+- Evaluator: `http://localhost:8080/api/evaluation/status`
+- Scheduler: `http://localhost:8080/api/scheduler/status`
+- Agent Registry: `http://localhost:8080/api/registry/stats`
+- Governance: `http://localhost:8080/api/governance/context`
 
 ## Core configuration
 
 ```env
 BEEZA_AUTH_TOKEN=SET_A_LONG_RANDOM_TOKEN
+BEEZA_PUBLIC_URL=https://beeza.example.com
 
 BEEZA_GOVERNANCE_ENFORCED=true
 BEEZA_DEFAULT_IDENTITY=human:owner
@@ -147,23 +152,22 @@ BEEZA_COLLAB_MAX_FOLLOW_UPS=2
 
 BEEZA_MEETING_ENABLED=true
 BEEZA_MEETING_INTERVAL_SECONDS=3
-BEEZA_MEETING_TURN_TIMEOUT_SECONDS=900
 
 BEEZA_SCHEDULER_ENABLED=true
 BEEZA_SCHEDULER_INTERVAL_SECONDS=3
-BEEZA_SCHEDULER_BATCH_SIZE=100
 BEEZA_SCHEDULER_FAILOVER_ATTEMPTS=3
 
 BEEZA_EVALUATOR_ENABLED=true
 BEEZA_EVALUATOR_INTERVAL_SECONDS=10
-BEEZA_EVALUATOR_BATCH_SIZE=100
 
 BEEZA_SOP_ENABLED=true
 BEEZA_SOP_INTERVAL_SECONDS=3
-BEEZA_SOP_BATCH_SIZE=100
-```
 
-Evaluator and SOP settings have safe defaults in code. Existing `.env` files do not need to add them immediately.
+BEEZA_PROTOCOL_ENABLED=true
+BEEZA_PROTOCOL_INTERVAL_SECONDS=2
+BEEZA_PROTOCOL_SYNC_TIMEOUT_SECONDS=20
+BEEZA_WEBHOOK_SECRET=
+```
 
 ## Governance headers
 
@@ -176,7 +180,7 @@ X-Beeza-Estimated-Cost-USD: 0
 X-Beeza-Approval-Key: APR-...
 ```
 
-The Command Center sets these headers for governed browser operations.
+The Command Center sets these headers for governed browser operations. External A2A, OpenAI-compatible and webhook execution is also evaluated through Governance and recorded in the audit ledger.
 
 ## Seeded service identities
 
@@ -185,138 +189,119 @@ The Command Center sets these headers for governed browser operations.
 | `service:runtime` | Runtime dispatch |
 | `service:collaboration` | Collaboration scheduler |
 | `service:meeting` | Structured meeting worker |
-| `service:scheduler` | Intelligent agent/runtime router |
-| `service:evaluator` | Evidence evaluation and replay comparison |
-| `service:sop` | SOP graph execution, approvals and rollback orchestration |
+| `service:scheduler` | Intelligent router |
+| `service:evaluator` | Evidence evaluation and replay |
+| `service:sop` | SOP graph execution and rollback |
+| `service:protocol` | A2A, MCP, OpenAI-compatible and webhook gateway |
 
-## SOP execution
+## Protocol Gateway
 
-A published procedure creates a new mission and node-run ledger:
+### A2A discovery
 
 ```text
-Published SOP
-    ↓ inputs + checksum
-SOP Run / Mission
-    ↓
-TASK nodes → Scheduler → Agent → Runtime
-APPROVAL nodes → Human gate
-    ↓
-Evaluation PASS / WARN / FAIL
-    ↓
-Next ready nodes or rollback
+GET /.well-known/agent-card.json
+GET /extendedAgentCard
 ```
 
-### Template lifecycle
+### A2A operations
 
 ```text
-DRAFT → PUBLISHED → DEPRECATED
+POST /message:send
+GET  /tasks
+GET  /tasks/{task_id}
+POST /tasks/{task_id}:cancel
+GET  /tasks/{task_id}:subscribe
 ```
 
-Publishing a new version deprecates the previous active version. Existing runs retain their original version and checksum.
+Example:
 
-### Verification gate
-
-```text
-Runtime completed, no evaluation → keep waiting
-PASS                             → complete node
-WARN                             → human approval
-FAIL                             → fail run and start rollback when defined
+```bash
+curl -X POST http://localhost:8080/message:send \
+  -H "Authorization: Bearer $BEEZA_AUTH_TOKEN" \
+  -H "X-Beeza-Identity: human:owner" \
+  -H "A2A-Version: 1.0" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": {
+      "messageId": "example-001",
+      "role": "ROLE_USER",
+      "parts": [{"text": "Investigate the service alert and return verified evidence."}],
+      "metadata": {
+        "priority": "HIGH",
+        "requiredSkills": ["metrics", "evidence"]
+      }
+    },
+    "configuration": {"returnImmediately": true}
+  }'
 ```
 
-### Rollback
-
-Completed nodes with rollback definitions are compensated in reverse dependency order. A successful compensation sequence leaves the original run `FAILED`; it proves recovery, not completion of the intended procedure.
-
-### Derive from verified work
+### MCP
 
 ```text
-Mission
-  → latest PASS evaluation per Collaboration Task
-  → preserve dependency graph and execution constraints
-  → create DRAFT SOP
-  → human review
-  → publish
+POST /mcp
 ```
 
-## SOP API
+Supported methods:
 
 ```text
-GET  /api/sop/status
-POST /api/sop/tick
-
-GET  /api/sop/templates
-POST /api/sop/templates
-GET  /api/sop/templates/{template_key}
-POST /api/sop/templates/{template_key}/versions
-POST /api/sop/versions/{version_key}/publish
-
-GET  /api/sop/runs
-POST /api/sop/templates/{template_key}/runs
-GET  /api/sop/runs/{run_key}
-POST /api/sop/runs/{run_key}/tick
-POST /api/sop/runs/{run_key}/cancel
-POST /api/sop/runs/{run_key}/nodes/{node_key}/decision
-
-POST /api/sop/derive/{mission_key}
+initialize
+notifications/initialized
+ping
+tools/list
+tools/call
 ```
 
-## SOP permissions
+Tools:
 
 ```text
-sop:read
-sop:write
-sop:publish
-sop:run
-sop:approve
+beeza_list_agents
+beeza_create_task
+beeza_get_task
+beeza_run_sop
 ```
 
-`SOP:run` and `sop:approve` are execution actions and obey the emergency kill switch.
-
-## Evaluation API
+### OpenAI-compatible ingress
 
 ```text
-GET   /api/evaluation/status
-POST  /api/evaluation/tick
-GET   /api/evaluation/policies
-PATCH /api/evaluation/policies/{policy_key}
-GET   /api/evaluation/runs
-GET   /api/evaluation/runs/{evaluation_key}
-GET   /api/evaluation/tasks/{task_key}
-POST  /api/evaluation/tasks/{task_key}
-GET   /api/evaluation/evidence
-GET   /api/evaluation/replays
-GET   /api/evaluation/replays/{replay_key}
-POST  /api/evaluation/replays
+POST /v1/chat/completions
 ```
 
-## Scheduler API
+Models:
 
 ```text
-GET   /api/scheduler/status
-POST  /api/scheduler/tick
-GET   /api/scheduler/runtime-pool
-GET   /api/scheduler/policies
-PATCH /api/scheduler/policies/{policy_key}
-GET   /api/scheduler/decisions
-POST  /api/scheduler/simulate
-POST  /api/missions/{mission_key}/routed-tasks
-POST  /api/scheduler/tasks/{task_key}/route
+beeza/auto
+beeza/openclaw
+beeza/cherryagent
+beeza/hermes
+beeza/thclaws
 ```
 
-## Agent Registry API
+Phase 11 supports `stream=false`. Long work returns an accepted task envelope with a polling URL instead of pretending that remote execution completed synchronously.
+
+### Webhook ingress
 
 ```text
-GET   /api/registry/stats
-GET   /api/registry/agents
-POST  /api/registry/agents
-GET   /api/registry/agents/{agent_key}
-PATCH /api/registry/agents/{agent_key}
-POST  /api/registry/agents/{agent_key}/heartbeat
-GET   /api/registry/organization
-GET   /api/registry/skills
-GET   /api/registry/delegations
-POST  /api/registry/delegations
-POST  /api/registry/reconcile
+POST /hooks/{channel}
+```
+
+Modes:
+
+```text
+task
+sop
+```
+
+Authentication uses the Beeza bearer token or `X-Beeza-Signature: sha256=...` when `BEEZA_WEBHOOK_SECRET` is configured. Channel and idempotency key prevent duplicate work.
+
+### Protocol monitoring API
+
+```text
+GET  /api/protocol/status
+POST /api/protocol/tick
+GET  /api/protocol/tasks
+GET  /api/protocol/events
+GET  /api/protocol/events/stream
+GET  /api/protocol/webhook-receipts
 ```
 
 ## Runtime configuration
@@ -342,21 +327,23 @@ THCLAW_WORKSPACE_DIR=
 ## Architecture
 
 ```text
-SOP Template + Immutable Version
+External A2A / MCP / OpenAI / Webhook Client
+        ↓ authentication + protocol identity
+Protocol Gateway Task
         ↓
-SOP Run + Mission
-        ↓ graph dependencies
-Scheduler + Agent Registry
-        ↓ governed route
-Collaboration Bus
+Mission + Collaboration Task or SOP Run
+        ↓
+Governance
+        ↓
+Agent Registry + Intelligent Scheduler
         ↓
 OpenClaw / CherryAgent / Hermes / thClaws
-        ↓ events, evidence and result
-Evaluation Policy
-        ↓ PASS / WARN / FAIL
-Approval / Next Node / Rollback
         ↓
-Verified SOP Outcome
+Runtime Events + Evidence
+        ↓
+Evaluation PASS / WARN / FAIL
+        ↓
+Protocol Status + Artifact + SSE
 ```
 
 ## Product direction
@@ -382,4 +369,5 @@ Architecture documents:
 - `docs/PHASE-8-SCHEDULER-ROUTER.md`
 - `docs/PHASE-9-EVALUATION.md`
 - `docs/PHASE-10-SOP-BUILDER.md`
+- `docs/PHASE-11-PROTOCOL-GATEWAY.md`
 - `docs/RUNTIME-INTEGRATIONS.md`
