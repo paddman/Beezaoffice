@@ -10,10 +10,17 @@ from main import app
 
 MAX_REQUEST_BYTES = int(os.getenv("BEEZA_MAX_REQUEST_BYTES", "2097152"))
 FORCE_HTTPS = os.getenv("BEEZA_FORCE_HTTPS", "false").strip().lower() == "true"
+PUBLIC_API_PATHS = {"/api/health"}
+
+
+def bearer_present(request: Request) -> bool:
+    authorization = request.headers.get("authorization", "")
+    return authorization.startswith("Bearer ") and bool(authorization[7:].strip())
 
 
 @app.middleware("http")
 async def pilot_security_headers(request: Request, call_next: Callable):
+    path = request.url.path
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -30,8 +37,14 @@ async def pilot_security_headers(request: Request, call_next: Callable):
 
     if FORCE_HTTPS and request.url.scheme != "https":
         forwarded = request.headers.get("x-forwarded-proto", "").lower()
-        if forwarded != "https" and request.url.path not in {"/health/live", "/health/ready"}:
+        if forwarded != "https" and path not in {"/health/live", "/health/ready"}:
             return JSONResponse(status_code=426, content={"detail": "HTTPS is required"})
+
+    if path.startswith("/api/") and path not in PUBLIC_API_PATHS and not bearer_present(request):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Authentication is required for protected BeezaOffice APIs"},
+        )
 
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -43,7 +56,7 @@ async def pilot_security_headers(request: Request, call_next: Callable):
         "style-src 'self' 'unsafe-inline'; script-src 'self'; "
         "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     )
-    if request.url.path.startswith("/api/"):
+    if path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     if FORCE_HTTPS or request.headers.get("x-forwarded-proto", "").lower() == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
