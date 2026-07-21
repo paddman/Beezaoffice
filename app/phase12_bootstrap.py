@@ -17,6 +17,7 @@ phase11_hardening._original_create_protocol_task = _base_protocol_service.create
 _base_protocol_service.create_protocol_task = phase12_runtime.enterprise_create_protocol_task
 phase11_app.create_protocol_task = phase12_runtime.enterprise_create_protocol_task
 
-import phase12_hardening  # noqa: E402,F401 — activate OIDC, API-key and tenant ownership checks
+import phase12_hardening  # noqa: E402,F401 — OIDC, API-key and tenant ownership checks
+import phase12_isolation  # noqa: E402,F401 — tenant-filtered registries and work ledgers
 
 app.version = "0.13.0"
