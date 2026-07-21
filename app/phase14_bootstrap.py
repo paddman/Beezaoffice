@@ -8,6 +8,7 @@ import commercial_quota_hardening  # noqa: F401 — tenant quota and enterprise 
 import phase14_release  # noqa: F401 — signed release manifest publishing
 import commercial_status_hardening  # noqa: F401 — signed digest-matched go-live readiness
 import phase14_observability  # noqa: F401 — commercial health and Prometheus metrics
+import phase14_schema  # noqa: F401 — Alembic schema status and readiness enforcement
 import commercial_request_context  # noqa: F401 — resolve session/API-key tenant before licensing
 from main import app
 
