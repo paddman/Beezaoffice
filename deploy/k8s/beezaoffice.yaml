@@ -19,6 +19,7 @@ stringData:
   DATABASE_URL: postgresql+psycopg://beeza:CHANGE_ME@postgresql-rw.database.svc:5432/beezaoffice
   REDIS_URL: redis://redis-master.cache.svc:6379/0
   BEEZA_AUTH_TOKEN: CHANGE_ME
+  BEEZA_METRICS_TOKEN: CHANGE_ME_METRICS
   BEEZA_WEBHOOK_SECRET: CHANGE_ME
 ---
 apiVersion: v1
