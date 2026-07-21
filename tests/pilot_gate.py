@@ -11,6 +11,7 @@ from typing import Any
 
 DEFAULT_TENANT = "tenant:beeza"
 SECOND_TENANT = "tenant:pilot-b"
+APP_VERSION = "0.16.0"
 
 
 class ApiError(RuntimeError):
@@ -75,7 +76,7 @@ def wait_ready(base_url: str, timeout_seconds: int = 180) -> dict[str, Any]:
             status, body = public_get(base_url, "/health/ready")
             if status == 200 and body.get("status") == "ready":
                 return body
-        except Exception as exc:  # service is still starting
+        except Exception as exc:
             last_error = exc
         time.sleep(2)
     raise RuntimeError(f"BeezaOffice did not become ready: {last_error}")
@@ -111,7 +112,7 @@ def create_mission(base_url: str, tenant: str, suffix: str) -> str:
         tenant=tenant,
         payload={
             "title": f"Pilot isolation mission {suffix}",
-            "objective": f"Verify durable tenant isolation and restore path for {suffix}.",
+            "objective": f"Verify durable Tenant isolation and restore path for {suffix}.",
             "priority": "NORMAL",
         },
     )
@@ -165,35 +166,52 @@ def assert_schema(base_url: str) -> dict[str, Any]:
     assert schema.get("managed") is True, schema
     assert schema.get("up_to_date") is True, schema
     assert schema.get("current_revision") == schema.get("expected_revision"), schema
+    assert schema.get("expected_revision") == "20260722_0002", schema
     _, status, _ = api(base_url, "GET", "/api/system/schema")
     assert status.get("up_to_date") is True, status
     return status
 
 
-def prepare(base_url: str, state_path: Path) -> None:
+def assert_release_and_pilot(base_url: str, expected_license_mode: str) -> dict[str, Any]:
+    _, commercial, _ = api(base_url, "GET", "/api/commercial/status")
+    assert commercial.get("version") == APP_VERSION, commercial
+    assert commercial.get("license", {}).get("mode") == expected_license_mode, commercial
+    if expected_license_mode == "enforce":
+        assert commercial.get("license", {}).get("valid") is True, commercial
+
+    _, pilot, _ = api(base_url, "GET", "/api/pilot/status")
+    assert pilot.get("version") == APP_VERSION, pilot
+    assert pilot.get("release", {}).get("tag") == f"v{APP_VERSION}", pilot
+    current = pilot.get("current") or {}
+    assert len(current.get("gates") or []) == 10, current
+    return pilot
+
+
+def prepare(base_url: str, state_path: Path, expected_license_mode: str) -> None:
     schema = assert_schema(base_url)
     ensure_second_tenant(base_url)
     mission_a = create_mission(base_url, DEFAULT_TENANT, "A")
     mission_b = create_mission(base_url, SECOND_TENANT, "B")
     assert_tenant_isolation(base_url, mission_a, mission_b)
-
-    _, commercial, _ = api(base_url, "GET", "/api/commercial/status")
-    assert commercial.get("version") == "0.15.0", commercial
-    assert commercial.get("license", {}).get("mode") == "development", commercial
+    pilot = assert_release_and_pilot(base_url, expected_license_mode)
 
     state = {
         "mission_a": mission_a,
         "mission_b": mission_b,
         "schema_revision": schema["current_revision"],
+        "pilot_key": (pilot.get("current") or {}).get("pilot", {}).get("key"),
+        "version": APP_VERSION,
+        "license_mode": expected_license_mode,
     }
     state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"gate": "prepare", "status": "passed", **state}, indent=2))
 
 
-def verify(base_url: str, state_path: Path) -> None:
+def verify(base_url: str, state_path: Path, expected_license_mode: str) -> None:
     state = json.loads(state_path.read_text(encoding="utf-8"))
     schema = assert_schema(base_url)
     assert schema["current_revision"] == state["schema_revision"]
+    assert state["version"] == APP_VERSION
     assert_tenant_isolation(base_url, state["mission_a"], state["mission_b"])
     _, mission_a, _ = api(base_url, "GET", f"/api/missions/{state['mission_a']}")
     _, mission_b, _ = api(
@@ -204,6 +222,8 @@ def verify(base_url: str, state_path: Path) -> None:
     )
     assert mission_a["key"] == state["mission_a"]
     assert mission_b["key"] == state["mission_b"]
+    pilot = assert_release_and_pilot(base_url, expected_license_mode)
+    assert (pilot.get("current") or {}).get("pilot", {}).get("key") == state["pilot_key"]
     print(json.dumps({"gate": "restore-verify", "status": "passed", **state}, indent=2))
 
 
@@ -212,12 +232,17 @@ def main() -> None:
     parser.add_argument("--base-url", default="http://127.0.0.1:18080")
     parser.add_argument("--state", default="pilot-state.json")
     parser.add_argument("--mode", choices=["prepare", "verify"], default="prepare")
+    parser.add_argument(
+        "--expected-license-mode",
+        choices=["development", "warn", "enforce"],
+        default="development",
+    )
     args = parser.parse_args()
     state_path = Path(args.state).resolve()
     if args.mode == "prepare":
-        prepare(args.base_url, state_path)
+        prepare(args.base_url, state_path, args.expected_license_mode)
     else:
-        verify(args.base_url, state_path)
+        verify(args.base_url, state_path, args.expected_license_mode)
 
 
 if __name__ == "__main__":
