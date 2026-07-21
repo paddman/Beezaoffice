@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import contextlib
 import contextvars
+from collections import defaultdict
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import business_service
 import phase13_app
 from business_models import OutcomeRecord
+from governance_models import BudgetLedger, GovernanceIdentity
 from main import redis_client
+from registry_models import RegisteredAgent
 
 _suppress_verified_meter: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "beeza_suppress_verified_meter", default=False
@@ -71,7 +75,6 @@ def idempotent_sync_outcomes(db: Session, tenant_key: str) -> dict[str, int]:
         row.task_key: {
             "fingerprint": outcome_fingerprint(row),
             "updated_at": row.updated_at,
-            "source_mode": row.source_mode,
         }
         for row in before_rows
     }
@@ -143,16 +146,111 @@ def lock_safe_sync_tenant(db: Session, tenant_key: str) -> dict[str, Any]:
             **idempotent_sync_outcomes(db, tenant_key),
         }
     finally:
-        redis_client.eval(
-            "if redis.call('get', KEYS[1]) == ARGV[1] then "
-            "return redis.call('del', KEYS[1]) else return 0 end",
-            1,
-            lock_key,
-            owner_token,
+        with contextlib.suppress(Exception):
+            redis_client.eval(
+                "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                "return redis.call('del', KEYS[1]) else return 0 end",
+                1,
+                lock_key,
+                owner_token,
+            )
+
+
+def period_agent_economics(
+    db: Session,
+    tenant_key: str,
+    rows: list[OutcomeRecord],
+) -> list[dict[str, Any]]:
+    identities = {
+        row.identity_key: row
+        for row in db.scalars(
+            select(GovernanceIdentity).where(
+                GovernanceIdentity.tenant_key == tenant_key
+            )
+        ).all()
+    }
+    registry = {
+        row.identity_key: row
+        for row in db.scalars(
+            select(RegisteredAgent)
+            .join(
+                GovernanceIdentity,
+                GovernanceIdentity.identity_key == RegisteredAgent.identity_key,
+            )
+            .where(GovernanceIdentity.tenant_key == tenant_key)
+        ).all()
+    }
+    grouped: dict[str, list[OutcomeRecord]] = defaultdict(list)
+    for row in rows:
+        grouped[row.agent_identity or "unassigned"].append(row)
+
+    mission_keys = sorted({row.mission_key for row in rows})
+    ledger_cost: dict[str, float] = {}
+    if mission_keys:
+        ledger_cost = dict(
+            db.execute(
+                select(BudgetLedger.identity_key, func.sum(BudgetLedger.amount_usd))
+                .join(
+                    GovernanceIdentity,
+                    GovernanceIdentity.identity_key == BudgetLedger.identity_key,
+                )
+                .where(
+                    GovernanceIdentity.tenant_key == tenant_key,
+                    BudgetLedger.mission_key.in_(mission_keys),
+                    BudgetLedger.entry_type.in_(["CHARGE", "ADJUST"]),
+                )
+                .group_by(BudgetLedger.identity_key)
+            ).all()
         )
+
+    result = []
+    for identity_key, group in grouped.items():
+        identity = identities.get(identity_key)
+        agent = registry.get(identity_key)
+        metrics = business_service.executive_metrics(group)
+        allocated_cost = float(
+            ledger_cost.get(identity_key, metrics["actual_cost_usd"]) or 0.0
+        )
+        value = float(metrics["value_created_usd"])
+        result.append(
+            {
+                "identity_key": identity_key,
+                "name": (
+                    identity.display_name
+                    if identity
+                    else (agent.display_name if agent else identity_key)
+                ),
+                "department_key": (
+                    identity.department_key
+                    if identity
+                    else (agent.department_key if agent else None)
+                ),
+                "reliability_score": agent.reliability_score if agent else None,
+                "total_runs": agent.total_runs if agent else 0,
+                "outcomes": metrics["outcomes"],
+                "verified": metrics["verified"],
+                "average_quality": metrics["average_quality"],
+                "hours_saved": metrics["hours_saved"],
+                "cost_usd": round(allocated_cost, 2),
+                "value_created_usd": round(value, 2),
+                "value_cost_ratio": (
+                    round(value / allocated_cost, 4)
+                    if allocated_cost > 0
+                    else None
+                ),
+                "sla_compliance": metrics["sla_compliance"],
+            }
+        )
+    return sorted(
+        result,
+        key=lambda item: (item["value_created_usd"], item["verified"]),
+        reverse=True,
+    )
 
 
 business_service.record_usage = hardened_record_usage
 business_service.sync_outcomes = idempotent_sync_outcomes
+business_service.agent_economics = period_agent_economics
 phase13_app.sync_outcomes = idempotent_sync_outcomes
 phase13_app.sync_tenant_with_lock = lock_safe_sync_tenant
+phase13_app.agent_economics = period_agent_economics
