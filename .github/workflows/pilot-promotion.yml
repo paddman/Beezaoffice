@@ -49,7 +49,6 @@ on:
 
 permissions:
   contents: write
-  id-token: read
 
 jobs:
   validate-and-promote:
@@ -85,10 +84,8 @@ jobs:
             https://*) ;;
             *) echo "Pilot URL must use HTTPS" >&2; exit 1 ;;
           esac
-          case "$SIGNED_IMAGE" in
-            *@sha256:????????????????????????????????????????????????????????????????) ;;
-            *) echo "signed_image must be pinned by a full SHA-256 digest" >&2; exit 1 ;;
-          esac
+          printf '%s\n' "$SIGNED_IMAGE" | grep -Eq '@sha256:[0-9a-f]{64}$' \
+            || { echo "signed_image must be pinned by a full lowercase SHA-256 digest" >&2; exit 1; }
           test -n "$COSIGN_IDENTITY"
           test -n "$CUSTOMER_SIGNOFF_NAME"
           test -n "$CUSTOMER_SIGNOFF_NOTE"
