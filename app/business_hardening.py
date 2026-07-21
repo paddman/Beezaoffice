@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 import business_service
 import phase13_app
 from business_models import OutcomeRecord
+from collaboration_models import CollaborationTask
 from governance_models import BudgetLedger, GovernanceIdentity
-from main import redis_client
+from main import Mission, redis_client
 from registry_models import RegisteredAgent
 
 _suppress_verified_meter: contextvars.ContextVar[bool] = contextvars.ContextVar(
@@ -55,14 +56,86 @@ def outcome_fingerprint(row: OutcomeRecord) -> tuple[Any, ...]:
         int(row.evidence_count or 0),
         round(float(row.baseline_minutes or 0.0), 6),
         round(float(row.actual_minutes or 0.0), 6),
+        round(float(row.hours_saved or 0.0), 6),
         round(float(row.baseline_cost_usd or 0.0), 6),
         round(float(row.actual_cost_usd or 0.0), 6),
+        round(float(row.cost_saved_usd or 0.0), 6),
         round(float(row.revenue_value_usd or 0.0), 6),
         round(float(row.sla_target_minutes or 0.0), 6),
         bool(row.sla_met),
         row.result_hash,
+        row.assumptions,
         row.metadata_json,
     )
+
+
+def apply_stable_estimation_baselines(
+    db: Session,
+    rows: list[OutcomeRecord],
+) -> None:
+    estimated = [row for row in rows if row.source_mode == "ESTIMATED"]
+    if not estimated:
+        return
+    task_keys = [row.task_key for row in estimated]
+    mission_keys = [row.mission_key for row in estimated]
+    tasks = {
+        row.task_key: row
+        for row in db.scalars(
+            select(CollaborationTask).where(
+                CollaborationTask.task_key.in_(task_keys)
+            )
+        ).all()
+    }
+    missions = {
+        row.mission_key: row
+        for row in db.scalars(
+            select(Mission).where(Mission.mission_key.in_(mission_keys))
+        ).all()
+    }
+    for row in estimated:
+        task = tasks.get(row.task_key)
+        mission = missions.get(row.mission_key)
+        if task is None or mission is None:
+            continue
+        context = task.context if isinstance(task.context, dict) else {}
+        baseline_minutes = float(
+            context.get("business_baseline_minutes")
+            or context.get("baseline_minutes")
+            or business_service.PRIORITY_BASELINE_MINUTES.get(
+                mission.priority,
+                business_service.PRIORITY_BASELINE_MINUTES["NORMAL"],
+            )
+        )
+        labor_rate = float(
+            context.get("labor_rate_usd")
+            or business_service.DEFAULT_LABOR_RATE_USD
+        )
+        baseline_cost = float(
+            context.get("baseline_cost_usd")
+            or baseline_minutes / 60.0 * labor_rate
+        )
+        row.baseline_minutes = round(max(0.0, baseline_minutes), 4)
+        row.hours_saved = round(
+            max(0.0, row.baseline_minutes - float(row.actual_minutes or 0.0))
+            / 60.0,
+            4,
+        )
+        row.baseline_cost_usd = round(max(0.0, baseline_cost), 4)
+        row.cost_saved_usd = round(
+            max(
+                0.0,
+                row.baseline_cost_usd - float(row.actual_cost_usd or 0.0),
+            ),
+            4,
+        )
+        row.assumptions = {
+            "estimated": True,
+            "baseline_rule": "task context override or fixed mission-priority baseline",
+            "labor_rate_usd": labor_rate,
+            "mission_cost_allocation": (
+                "task-linked cost plus equal share of unassigned mission charges"
+            ),
+        }
 
 
 def idempotent_sync_outcomes(db: Session, tenant_key: str) -> dict[str, int]:
@@ -90,6 +163,8 @@ def idempotent_sync_outcomes(db: Session, tenant_key: str) -> dict[str, int]:
             select(OutcomeRecord).where(OutcomeRecord.tenant_key == tenant_key)
         ).all()
     )
+    apply_stable_estimation_baselines(db, after_rows)
+
     created = 0
     updated = 0
     unchanged = 0
