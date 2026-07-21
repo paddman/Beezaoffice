@@ -60,7 +60,10 @@ jobs:
         run: docker run --rm beezaoffice:test python phase14_selftest.py
 
       - name: Smoke-test 0.16.0 Pilot Operations runtime
-        run: docker run --rm beezaoffice:test python /srv/beezaoffice/../tests/pilot_smoke.py
+        run: |
+          docker run --rm \
+            -v "$PWD/tests:/tests:ro" \
+            beezaoffice:test python /tests/pilot_smoke.py
 
       - name: Verify Pilot utilities load
         run: |
@@ -69,7 +72,9 @@ jobs:
           python tests/pilot_runtime_e2e.py --help >/dev/null
           python tests/pilot_customer_acceptance.py --help >/dev/null
           python tests/pilot_record_gate.py --help >/dev/null
-          python deploy/pilot/prepare_license.py --help >/dev/null
+          docker run --rm \
+            -v "$PWD/deploy/pilot:/pilot:ro" \
+            beezaoffice:test python /pilot/prepare_license.py --help >/dev/null
 
       - name: Generate SPDX dependency inventory
         run: |
