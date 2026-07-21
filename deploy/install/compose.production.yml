@@ -1,0 +1,68 @@
+services:
+  beezaoffice:
+    image: ${BEEZA_IMAGE:?Set BEEZA_IMAGE to a signed digest-pinned image}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      BEEZA_AUTH_TOKEN: ${BEEZA_AUTH_TOKEN}
+      BEEZA_METRICS_TOKEN: ${BEEZA_METRICS_TOKEN}
+      BEEZA_LICENSE_MODE: ${BEEZA_LICENSE_MODE:-enforce}
+      BEEZA_DEPLOYMENT_ID: ${BEEZA_DEPLOYMENT_ID}
+      BEEZA_LICENSE_PUBLIC_KEY: ${BEEZA_LICENSE_PUBLIC_KEY:-}
+      BEEZA_LICENSE_TOKEN: ${BEEZA_LICENSE_TOKEN:-}
+    ports:
+      - "${BEEZA_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --save 60 1000
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  redis_data:
