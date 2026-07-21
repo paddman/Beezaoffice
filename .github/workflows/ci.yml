@@ -8,108 +8,24 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Compile Python source
-        run: >-
-          python -m py_compile
-          app/main.py
-          app/phase2_app.py
-          app/phase3_app.py
-          app/phase4_app.py
-          app/phase5_app.py
-          app/phase6_app.py
-          app/phase6_runtime.py
-          app/phase7_app.py
-          app/phase7_runtime.py
-          app/phase8_app.py
-          app/phase8_runtime.py
-          app/phase9_app.py
-          app/phase9_runtime.py
-          app/phase10_app.py
-          app/phase10_runtime.py
-          app/phase11_app.py
-          app/phase11_runtime.py
-          app/phase11_security.py
-          app/phase11_hardening.py
-          app/phase11_bootstrap.py
-          app/phase12_app.py
-          app/phase12_runtime.py
-          app/phase12_hardening.py
-          app/phase12_isolation.py
-          app/phase12_sop_tenant.py
-          app/phase12_bootstrap.py
-          app/phase13_app.py
-          app/phase13_observability.py
-          app/phase13_bootstrap.py
-          app/phase14_app.py
-          app/phase14_release.py
-          app/phase14_observability.py
-          app/phase14_selftest.py
-          app/phase14_schema.py
-          app/phase14_bootstrap.py
-          app/schema_service.py
-          app/business_models.py
-          app/business_service.py
-          app/business_hardening.py
-          app/business_route_hardening.py
-          app/commercial_models.py
-          app/commercial_service.py
-          app/commercial_schema_hardening.py
-          app/commercial_license_hardening.py
-          app/commercial_hardening.py
-          app/commercial_quota_hardening.py
-          app/commercial_status_hardening.py
-          app/commercial_request_context.py
-          app/collaboration_models.py
-          app/collaboration_service.py
-          app/meeting_models.py
-          app/meeting_service.py
-          app/governance_models.py
-          app/governance_service.py
-          app/governance_hardening.py
-          app/registry_models.py
-          app/registry_service.py
-          app/scheduler_models.py
-          app/scheduler_service.py
-          app/evaluation_models.py
-          app/evaluation_service.py
-          app/evaluation_hardening.py
-          app/evaluation_startup_fix.py
-          app/sop_models.py
-          app/sop_service.py
-          app/sop_hardening.py
-          app/protocol_models.py
-          app/protocol_service.py
-          app/enterprise_models.py
-          app/enterprise_service.py
-          app/runtime_adapters.py
-          app/migrations/env.py
-          app/migrations/versions/20260721_0001_phase14_baseline.py
-          deploy/license/generate-keys.py
-          deploy/license/issue-license.py
-          deploy/license/verify-license.py
-          tests/pilot_gate.py
+        run: |
+          find app tests deploy/license deploy/pilot -type f -name '*.py' -print0 \
+            | xargs -0 python -m py_compile
+
       - name: Check browser JavaScript
         run: |
-          node --check app/static/app.js
-          node --check app/static/phase3.js
-          node --check app/static/phase4.js
-          node --check app/static/phase5.js
-          node --check app/static/phase6_bootstrap.js
-          node --check app/static/phase6.js
-          node --check app/static/phase7.js
-          node --check app/static/phase8.js
-          node --check app/static/phase9.js
-          node --check app/static/phase10.js
-          node --check app/static/phase11.js
-          node --check app/static/phase12.js
-          node --check app/static/phase13.js
-          node --check app/static/phase14.js
-          node --check app/static/phase14_brand.js
+          find app/static -maxdepth 1 -type f -name '*.js' -print0 \
+            | xargs -0 -n1 node --check
+
       - name: Check deployment scripts and Compose files
         run: |
           sh -n deploy/backup/run-backup.sh
@@ -121,6 +37,8 @@ jobs:
           docker compose -f deploy/pilot/compose.yml config >/dev/null
         env:
           BEEZA_IMAGE: ghcr.io/paddman/beezaoffice@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          BEEZA_APP_VERSION: 0.16.0
+          BEEZA_RELEASE_CHANNEL: pilot
           DATABASE_URL: postgresql+psycopg://beeza:test@postgres:5432/beezaoffice
           REDIS_URL: redis://redis:6379/0
           BEEZA_AUTH_TOKEN: test
@@ -129,21 +47,35 @@ jobs:
           POSTGRES_DB: beezaoffice
           POSTGRES_USER: beeza
           POSTGRES_PASSWORD: test
+
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
+
       - name: Validate Alembic revision graph
         run: |
           docker run --rm beezaoffice:test alembic -c alembic.ini heads
-          test "$(docker run --rm beezaoffice:test alembic -c alembic.ini heads | awk '{print $1}')" = "20260721_0001"
+          test "$(docker run --rm beezaoffice:test alembic -c alembic.ini heads | awk '{print $1}')" = "20260722_0002"
+
       - name: Verify signed-license cryptography
         run: docker run --rm beezaoffice:test python phase14_selftest.py
-      - name: Smoke-test Phase 14 commercial runtime
+
+      - name: Smoke-test 0.16.0 Pilot Operations runtime
+        run: docker run --rm beezaoffice:test python /srv/beezaoffice/../tests/pilot_smoke.py
+
+      - name: Verify Pilot utilities load
         run: |
-          docker run --rm beezaoffice:test python -c "from phase14_bootstrap import app; from phase14_app import feature_for_request; from phase14_release import ReleasePublish, publish_release_manifest; from phase14_observability import prometheus_commercial_metrics, phase14_health, active_license_count; from phase14_schema import SCHEMA_STRICT, migration_aware_readiness; from schema_service import expected_revision, schema_status; from commercial_models import TenantOnboarding, CommercialLicense, FeatureEntitlement, BrandProfile, DeploymentActivation, ReleaseManifest, OnboardingCreate, BrandUpdate; from commercial_service import LICENSE_MODE, PLAN_FEATURES, PLAN_LIMITS, token_hash, verify_license_token; from commercial_license_hardening import strict_verify_license_token; from commercial_hardening import contract_entitlement_allowed, contract_entitlement_limit, hardened_activate_license, hardened_current_license; from commercial_schema_hardening import migrate_entitlement_source_constraint; from commercial_quota_hardening import commercial_feature_for_request; from commercial_status_hardening import hardened_commercial_status; from commercial_request_context import resolve_commercial_tenant; from business_models import OutcomeRecord; from governance_service import permission_for_request, EXECUTION_ACTIONS; paths=[getattr(route,'path',None) for route in app.router.routes]; publish=ReleasePublish(version='0.15.0',image_ref='ghcr.io/paddman/beezaoffice:0.15.0',image_digest='sha256:'+'a'*64,signature_ref='oci://signature',sbom_ref='oci://sbom',provenance_ref='oci://provenance'); constraint=next(item for item in FeatureEntitlement.__table__.constraints if item.name == 'uq_commercial_tenant_feature_source'); assert app.version == '0.15.0'; assert expected_revision() == '20260721_0001'; assert callable(schema_status) and callable(migration_aware_readiness); assert TenantOnboarding.__tablename__ == 'commercial_onboarding'; assert CommercialLicense.__tablename__ == 'commercial_licenses'; assert FeatureEntitlement.__tablename__ == 'commercial_feature_entitlements'; assert [column.name for column in constraint.columns] == ['tenant_key','feature_key','source']; assert BrandProfile.__tablename__ == 'commercial_brand_profiles'; assert DeploymentActivation.__tablename__ == 'commercial_deployments'; assert ReleaseManifest.__tablename__ == 'commercial_release_manifests'; assert OnboardingCreate(organization_name='Beeza').deployment_mode == 'PRIVATE'; assert BrandUpdate(primary_color='#dc285c').primary_color == '#dc285c'; assert publish.channel == 'stable'; assert LICENSE_MODE in {'development','warn','enforce'}; assert 'runtime.dispatch' in PLAN_FEATURES['plan:sovereign']; assert PLAN_LIMITS['plan:sovereign']['max_agents'] == 1000; assert len(token_hash('beeza')) == 64; assert callable(verify_license_token) and callable(strict_verify_license_token); assert callable(hardened_activate_license) and callable(hardened_current_license); assert callable(contract_entitlement_allowed) and callable(contract_entitlement_limit) and callable(migrate_entitlement_source_constraint); assert callable(hardened_commercial_status) and callable(resolve_commercial_tenant); assert OutcomeRecord.__tablename__ == 'business_outcomes'; assert callable(prometheus_commercial_metrics) and callable(phase14_health) and callable(active_license_count) and callable(publish_release_manifest); assert feature_for_request('POST','/api/missions') == 'core.missions'; assert feature_for_request('POST','/message:send') == 'protocol'; assert feature_for_request('POST','/api/enterprise/tenants') == 'enterprise'; assert commercial_feature_for_request('POST','/api/enterprise/tenants') == 'enterprise'; assert feature_for_request('GET','/api/missions') is None; assert paths.count('/api/commercial/status') == 1; assert paths.count('/api/commercial/license/import') == 1; assert paths.count('/api/commercial/brand') == 2; assert paths.count('/api/commercial/deployments') == 2; assert paths.count('/api/commercial/releases') == 1; assert paths.count('/api/commercial/releases/publish') == 1; assert paths.count('/api/system/schema') == 1; assert paths.count('/health/ready') == 1; assert paths.count('/metrics') == 1; assert paths.count('/api/health') == 1; assert permission_for_request('POST','/api/commercial/license/import') == 'commercial:license:manage'; assert permission_for_request('PUT','/api/commercial/brand') == 'commercial:brand:manage'; assert permission_for_request('POST','/api/commercial/releases/publish') == 'commercial:release:publish'; assert 'commercial:license:manage' in EXECUTION_ACTIONS and 'commercial:release:publish' in EXECUTION_ACTIONS"
+          python tests/pilot_load.py --help >/dev/null
+          python tests/pilot_security.py --help >/dev/null
+          python tests/pilot_runtime_e2e.py --help >/dev/null
+          python tests/pilot_customer_acceptance.py --help >/dev/null
+          python tests/pilot_record_gate.py --help >/dev/null
+          python deploy/pilot/prepare_license.py --help >/dev/null
+
       - name: Generate SPDX dependency inventory
         run: |
-          docker run --rm beezaoffice:test python -c "import importlib.metadata as m,json; packages=sorted([{'name':d.metadata.get('Name',d.metadata.get('Summary','unknown')),'version':d.version} for d in m.distributions()],key=lambda x:x['name'].lower()); print(json.dumps({'spdxVersion':'SPDX-2.3','dataLicense':'CC0-1.0','SPDXID':'SPDXRef-DOCUMENT','name':'BeezaOffice-Python-Dependencies','documentNamespace':'https://beezaoffice.local/sbom/python','packages':[{'SPDXID':'SPDXRef-Package-'+str(i),'name':p['name'],'versionInfo':p['version'],'downloadLocation':'NOASSERTION','filesAnalyzed':False} for i,p in enumerate(packages)]},indent=2))" > sbom.spdx.json
+          docker run --rm beezaoffice:test python -c "import importlib.metadata as m,json; packages=sorted([{'name':d.metadata.get('Name',d.metadata.get('Summary','unknown')),'version':d.version} for d in m.distributions()],key=lambda x:x['name'].lower()); print(json.dumps({'spdxVersion':'SPDX-2.3','dataLicense':'CC0-1.0','SPDXID':'SPDXRef-DOCUMENT','name':'BeezaOffice-0.16.0-Python-Dependencies','documentNamespace':'https://beezaoffice.local/sbom/python/0.16.0','packages':[{'SPDXID':'SPDXRef-Package-'+str(i),'name':p['name'],'versionInfo':p['version'],'downloadLocation':'NOASSERTION','filesAnalyzed':False} for i,p in enumerate(packages)]},indent=2))" > sbom.spdx.json
+
       - uses: actions/upload-artifact@v4
         with:
-          name: beezaoffice-sbom
+          name: beezaoffice-0.16.0-sbom
           path: sbom.spdx.json
