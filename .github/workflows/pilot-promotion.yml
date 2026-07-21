@@ -1,0 +1,254 @@
+name: Pilot Validation and Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS URL of the deployed Pilot environment
+        required: true
+        type: string
+      tenant_key:
+        description: Licensed Pilot Tenant key
+        required: true
+        default: tenant:beeza
+        type: string
+      pilot_key:
+        description: Pilot Program key from /api/pilot/status
+        required: true
+        type: string
+      runtimes:
+        description: Comma-separated real Runtime keys
+        required: true
+        default: openclaw,cherryagent,hermes,thclaws
+        type: string
+      release_artifact_ref:
+        description: Verified RC image digest/signature evidence reference
+        required: true
+        type: string
+      customer_name:
+        description: First Pilot customer organization
+        required: true
+        type: string
+      customer_signoff_name:
+        description: Human customer representative approving the Pilot journey
+        required: true
+        type: string
+      customer_signoff_note:
+        description: Human acceptance note
+        required: true
+        type: string
+      promote_stable_tag:
+        description: Create and push v0.16.0 after Pilot acceptance
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: pilot-production
+    env:
+      BASE_URL: ${{ inputs.base_url }}
+      TENANT_KEY: ${{ inputs.tenant_key }}
+      PILOT_KEY: ${{ inputs.pilot_key }}
+      RUNTIMES: ${{ inputs.runtimes }}
+      CUSTOMER_NAME: ${{ inputs.customer_name }}
+      CUSTOMER_SIGNOFF_NAME: ${{ inputs.customer_signoff_name }}
+      CUSTOMER_SIGNOFF_NOTE: ${{ inputs.customer_signoff_note }}
+      RELEASE_ARTIFACT_REF: ${{ inputs.release_artifact_ref }}
+      BEEZA_AUTH_TOKEN: ${{ secrets.PILOT_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Require Pilot authentication secret
+        run: test -n "$BEEZA_AUTH_TOKEN"
+
+      - name: Verify deployed version and existing gates
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          request = urllib.request.Request(
+              f"{os.environ['BASE_URL'].rstrip('/')}/api/pilot/programs/{os.environ['PILOT_KEY']}",
+              headers={
+                  "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
+                  "X-Beeza-Identity": "human:owner",
+                  "X-Beeza-Tenant": os.environ["TENANT_KEY"],
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              data = json.load(response)
+          assert data["pilot"]["target_version"] == "0.16.0", data
+          blocked = [g for g in data["gates"] if g["status"] in {"FAIL", "BLOCKED"}]
+          assert not blocked, blocked
+          with open("pilot-before.json", "w", encoding="utf-8") as handle:
+              json.dump(data, handle, indent=2, sort_keys=True)
+          PY
+
+      - name: Record verified signed RC release
+        run: |
+          python tests/pilot_record_gate.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --tenant "$TENANT_KEY" \
+            --pilot-key "$PILOT_KEY" \
+            --gate release_signed \
+            --status PASS \
+            --source SIGNED_RC_INSTALL \
+            --summary "Pilot image digest and Cosign identity were verified before deployment" \
+            --artifact-ref "$RELEASE_ARTIFACT_REF"
+
+      - name: Run real Runtime end-to-end verification
+        run: |
+          python tests/pilot_runtime_e2e.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --tenant "$TENANT_KEY" \
+            --runtimes "$RUNTIMES" \
+            --timeout 600 \
+            --pilot-key "$PILOT_KEY" \
+            --artifact-ref github-actions://${{ github.run_id }}/real-runtime-e2e \
+            --output real-runtime-e2e.json
+
+      - name: Run production security review
+        run: |
+          python tests/pilot_security.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --tenant "$TENANT_KEY" \
+            --minimum-score 90 \
+            --output production-security-review.json
+          python tests/pilot_record_gate.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --tenant "$TENANT_KEY" \
+            --pilot-key "$PILOT_KEY" \
+            --gate security_review \
+            --status PASS \
+            --source PILOT_PRODUCTION \
+            --summary "Production security baseline passed" \
+            --report production-security-review.json \
+            --artifact-ref github-actions://${{ github.run_id }}/security
+
+      - name: Run Pilot load test
+        run: |
+          python tests/pilot_load.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --tenant "$TENANT_KEY" \
+            --path /api/missions \
+            --concurrency 50 \
+            --duration 60 \
+            --max-error-rate 0.01 \
+            --max-p95-ms 1500 \
+            --minimum-rps 10 \
+            --output production-load-report.json
+          python tests/pilot_record_gate.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --tenant "$TENANT_KEY" \
+            --pilot-key "$PILOT_KEY" \
+            --gate load_test \
+            --status PASS \
+            --source PILOT_PRODUCTION \
+            --summary "50-concurrency 60-second production Pilot load gate passed" \
+            --report production-load-report.json \
+            --artifact-ref github-actions://${{ github.run_id }}/load
+
+      - name: Require all pre-customer gates
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          request = urllib.request.Request(
+              f"{os.environ['BASE_URL'].rstrip('/')}/api/pilot/programs/{os.environ['PILOT_KEY']}",
+              headers={
+                  "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
+                  "X-Beeza-Identity": "human:owner",
+                  "X-Beeza-Tenant": os.environ["TENANT_KEY"],
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              data = json.load(response)
+          incomplete = [
+              gate["gate_key"] for gate in data["gates"]
+              if gate["gate_key"] != "customer_acceptance" and gate["status"] != "PASS"
+          ]
+          assert not incomplete, f"Incomplete pre-customer gates: {incomplete}"
+          PY
+
+      - name: Run first-customer acceptance journey
+        run: |
+          python tests/pilot_customer_acceptance.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --tenant "$TENANT_KEY" \
+            --customer-name "$CUSTOMER_NAME" \
+            --version 0.16.0 \
+            --runtimes "$RUNTIMES" \
+            --signoff-name "$CUSTOMER_SIGNOFF_NAME" \
+            --signoff-note "$CUSTOMER_SIGNOFF_NOTE" \
+            --artifact-ref github-actions://${{ github.run_id }}/customer-acceptance \
+            --output customer-acceptance-report.json
+
+      - name: Accept Pilot after every gate passes
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          payload = json.dumps({
+              "decision": "ACCEPT",
+              "note": f"Customer sign-off: {os.environ['CUSTOMER_SIGNOFF_NAME']} — {os.environ['CUSTOMER_SIGNOFF_NOTE']}",
+          }).encode()
+          request = urllib.request.Request(
+              f"{os.environ['BASE_URL'].rstrip('/')}/api/pilot/programs/{os.environ['PILOT_KEY']}/decision",
+              method="POST",
+              data=payload,
+              headers={
+                  "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
+                  "X-Beeza-Identity": "human:owner",
+                  "X-Beeza-Tenant": os.environ["TENANT_KEY"],
+                  "X-Beeza-Risk-Level": "LOW",
+                  "Content-Type": "application/json",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              data = json.load(response)
+          assert data["pilot"]["status"] == "ACCEPTED", data
+          with open("pilot-accepted.json", "w", encoding="utf-8") as handle:
+              json.dump(data, handle, indent=2, sort_keys=True)
+          PY
+
+      - name: Promote stable v0.16.0 tag
+        if: ${{ inputs.promote_stable_tag }}
+        run: |
+          set -eu
+          git config user.name "BeezaOffice Release Bot"
+          git config user.email "release-bot@beezaoffice.local"
+          if git rev-parse "v0.16.0" >/dev/null 2>&1; then
+            test "$(git rev-list -n 1 v0.16.0)" = "$GITHUB_SHA"
+          else
+            git tag -a v0.16.0 -m "BeezaOffice 0.16.0 Pilot Operations Release"
+            git push origin v0.16.0
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beezaoffice-0.16.0-real-pilot
+          path: |
+            pilot-before.json
+            real-runtime-e2e.json
+            production-security-review.json
+            production-load-report.json
+            customer-acceptance-report.json
+            pilot-accepted.json
+          if-no-files-found: ignore
+          retention-days: 90
