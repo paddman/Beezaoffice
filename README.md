@@ -47,7 +47,9 @@ Each outcome can contain:
 - Evaluation result hash
 - Measurement assumptions
 
-Automatic records are marked `ESTIMATED`. Confirmed finance or operational values can be entered as `MANUAL`; the worker will not overwrite them.
+Automatic records are marked `ESTIMATED`. They use explicit Task context when supplied; otherwise they use a stable Mission-priority baseline and the configured labor rate. Confirmed finance or operational values can be entered as `MANUAL`; the worker will not overwrite them.
+
+The synchronization path is idempotent. Unchanged evaluated work keeps its original update timestamp and does not increment the verified-outcome meter again.
 
 ### Executive dashboard
 
@@ -61,7 +63,7 @@ The dashboard provides:
 - Value-to-cost ratio
 - SLA compliance
 - Department scorecards
-- Agent economics
+- Agent economics for the selected period
 - Daily value trend
 - Top verified outcomes
 
@@ -171,6 +173,7 @@ Required production changes:
 POSTGRES_PASSWORD=SET_A_STRONG_PASSWORD
 DATABASE_URL=postgresql+psycopg://beeza:THE_SAME_PASSWORD@postgres:5432/beezaoffice
 BEEZA_AUTH_TOKEN=SET_A_LONG_RANDOM_TOKEN
+BEEZA_METRICS_TOKEN=SET_A_SEPARATE_METRICS_TOKEN
 BEEZA_PUBLIC_URL=https://beeza.example.com
 BEEZA_DEFAULT_TENANT=tenant:beeza
 ```
@@ -181,7 +184,6 @@ Business configuration:
 BEEZA_BUSINESS_ENABLED=true
 BEEZA_BUSINESS_INTERVAL_SECONDS=60
 BEEZA_DEFAULT_LABOR_RATE_USD=30
-BEEZA_BILLING_CURRENCY=USD
 ```
 
 Enterprise storage configuration:
@@ -266,8 +268,8 @@ POST /hooks/{channel}
 ```text
 GET /health/live
 GET /health/ready
-GET /metrics
 GET /api/health
+GET /metrics     Authorization: Bearer $BEEZA_METRICS_TOKEN
 ```
 
 Phase 13 Prometheus metrics include:
@@ -280,6 +282,13 @@ beeza_business_value_created_usd
 beeza_business_sla_compliance_ratio
 beeza_business_installed_packs
 beeza_business_active_subscriptions
+```
+
+Example:
+
+```bash
+curl -H "Authorization: Bearer $BEEZA_METRICS_TOKEN" \
+  http://localhost:8080/metrics
 ```
 
 ## Runtime configuration
@@ -327,6 +336,7 @@ Executive KPI / Department / Agent Economics / Billing / SIEM
 ## Measurement boundary
 
 - Automatically calculated time and cost values are estimates unless manually confirmed.
+- Default estimates use fixed priority baselines, not a baseline derived from the observed completion time.
 - Revenue attribution requires explicit business input.
 - Evaluation quality does not independently prove financial value.
 - Billing output is an estimate, not a legally binding invoice.
