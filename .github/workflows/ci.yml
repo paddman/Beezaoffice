@@ -45,10 +45,15 @@ jobs:
           app/phase13_app.py
           app/phase13_observability.py
           app/phase13_bootstrap.py
+          app/phase14_app.py
+          app/phase14_bootstrap.py
           app/business_models.py
           app/business_service.py
           app/business_hardening.py
           app/business_route_hardening.py
+          app/commercial_models.py
+          app/commercial_service.py
+          app/commercial_hardening.py
           app/collaboration_models.py
           app/collaboration_service.py
           app/meeting_models.py
@@ -87,15 +92,28 @@ jobs:
           node --check app/static/phase11.js
           node --check app/static/phase12.js
           node --check app/static/phase13.js
+          node --check app/static/phase14.js
       - name: Check deployment scripts
         run: |
           sh -n deploy/backup/run-backup.sh
           sh -n deploy/backup/restore-backup.sh
+          sh -n deploy/install/install.sh
+          docker compose -f deploy/install/compose.production.yml config >/dev/null
+        env:
+          BEEZA_IMAGE: ghcr.io/paddman/beezaoffice@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          DATABASE_URL: postgresql+psycopg://beeza:test@postgres:5432/beezaoffice
+          REDIS_URL: redis://redis:6379/0
+          BEEZA_AUTH_TOKEN: test
+          BEEZA_METRICS_TOKEN: test
+          BEEZA_DEPLOYMENT_ID: deployment:test
+          POSTGRES_DB: beezaoffice
+          POSTGRES_USER: beeza
+          POSTGRES_PASSWORD: test
       - name: Build application image
         run: docker build -t beezaoffice:test ./app
-      - name: Smoke-test Phase 13 business runtime
+      - name: Smoke-test Phase 14 commercial runtime
         run: |
-          docker run --rm beezaoffice:test python -c "from phase13_bootstrap import app; from phase12_hardening import enterprise_permission_for_request, hardened_verify_oidc_token; from phase12_sop_tenant import SOPDeriveRequest; from business_models import OutcomeRecord, ExecutiveSnapshot, BillingPlan, TenantSubscription, UsageDaily, IndustryPack, PackInstallation, OutcomeUpsert; from business_service import executive_metrics, DEFAULT_LABOR_RATE_USD; from business_hardening import idempotent_sync_outcomes, lock_safe_sync_tenant; from business_route_hardening import upsert_manual_outcome_hardened; from phase13_observability import prometheus_business_metrics, phase13_health, require_metrics_token; from enterprise_models import EnterpriseTenant, IdentityProvider, EnterpriseSession, EnterpriseApiKey, ResourceScope, BackupPlan, BackupRun, SIEMSink; from enterprise_service import token_hash, DEFAULT_TENANT; from governance_service import permission_for_request, EXECUTION_ACTIONS; paths=[getattr(route,'path',None) for route in app.router.routes]; outcome=OutcomeUpsert(mission_key='M-1',task_key='TASK-1'); assert app.version == '0.14.0'; assert outcome.status == 'VERIFIED' and outcome.category == 'General'; assert OutcomeRecord.__tablename__ == 'business_outcomes'; assert ExecutiveSnapshot.__tablename__ == 'business_executive_snapshots'; assert BillingPlan.__tablename__ == 'business_billing_plans'; assert TenantSubscription.__tablename__ == 'business_tenant_subscriptions'; assert UsageDaily.__tablename__ == 'business_usage_daily'; assert IndustryPack.__tablename__ == 'business_industry_packs'; assert PackInstallation.__tablename__ == 'business_pack_installations'; assert executive_metrics([])['outcomes'] == 0; assert DEFAULT_LABOR_RATE_USD > 0; assert callable(idempotent_sync_outcomes) and callable(lock_safe_sync_tenant); assert callable(upsert_manual_outcome_hardened); assert callable(prometheus_business_metrics) and callable(phase13_health) and callable(require_metrics_token); assert EnterpriseTenant.__tablename__ == 'enterprise_tenants'; assert IdentityProvider.__tablename__ == 'enterprise_identity_providers'; assert EnterpriseSession.__tablename__ == 'enterprise_sessions'; assert EnterpriseApiKey.__tablename__ == 'enterprise_api_keys'; assert ResourceScope.__tablename__ == 'enterprise_resource_scopes'; assert BackupPlan.__tablename__ == 'enterprise_backup_plans'; assert BackupRun.__tablename__ == 'enterprise_backup_runs'; assert SIEMSink.__tablename__ == 'enterprise_siem_sinks'; assert SOPDeriveRequest(template_key='verified-flow',name='Verified flow').category == 'Derived'; assert len(token_hash('beeza')) == 64; assert DEFAULT_TENANT.startswith('tenant:'); assert paths.count('/api/missions') == 2; assert paths.count('/api/registry/agents') == 1; assert paths.count('/api/collaboration/tasks') == 1; assert paths.count('/api/sop/templates') == 2; assert paths.count('/api/sop/derive/{mission_key}') == 1; assert paths.count('/api/protocol/events') == 1; assert paths.count('/api/business/executive') == 1; assert paths.count('/api/business/outcomes') == 2; assert paths.count('/api/business/industry-packs') == 1; assert paths.count('/metrics') == 1; assert paths.count('/api/health') == 1; assert '/health/ready' in paths; assert enterprise_permission_for_request('POST','/message:send') == 'protocol:use'; assert callable(hardened_verify_oidc_token); assert permission_for_request('POST', '/api/business/sync') == 'business:sync'; assert permission_for_request('POST', '/api/business/industry-packs/demo/install') == 'business:pack:install'; assert 'business:pack:install' in EXECUTION_ACTIONS"
+          docker run --rm beezaoffice:test python -c "from phase14_bootstrap import app; from phase14_app import feature_for_request; from commercial_models import TenantOnboarding, CommercialLicense, FeatureEntitlement, BrandProfile, DeploymentActivation, ReleaseManifest, OnboardingCreate, BrandUpdate; from commercial_service import LICENSE_MODE, PLAN_FEATURES, PLAN_LIMITS, token_hash, verify_license_token; from commercial_hardening import contract_entitlement_allowed, contract_entitlement_limit; from business_models import OutcomeRecord; from phase13_observability import prometheus_business_metrics; from governance_service import permission_for_request, EXECUTION_ACTIONS; paths=[getattr(route,'path',None) for route in app.router.routes]; assert app.version == '0.15.0'; assert TenantOnboarding.__tablename__ == 'commercial_onboarding'; assert CommercialLicense.__tablename__ == 'commercial_licenses'; assert FeatureEntitlement.__tablename__ == 'commercial_feature_entitlements'; assert BrandProfile.__tablename__ == 'commercial_brand_profiles'; assert DeploymentActivation.__tablename__ == 'commercial_deployments'; assert ReleaseManifest.__tablename__ == 'commercial_release_manifests'; assert OnboardingCreate(organization_name='Beeza').deployment_mode == 'PRIVATE'; assert BrandUpdate(primary_color='#dc285c').primary_color == '#dc285c'; assert LICENSE_MODE in {'development','warn','enforce'}; assert 'runtime.dispatch' in PLAN_FEATURES['plan:sovereign']; assert PLAN_LIMITS['plan:sovereign']['max_agents'] == 1000; assert len(token_hash('beeza')) == 64; assert callable(verify_license_token) and callable(contract_entitlement_allowed) and callable(contract_entitlement_limit); assert OutcomeRecord.__tablename__ == 'business_outcomes'; assert callable(prometheus_business_metrics); assert feature_for_request('POST','/api/missions') == 'core.missions'; assert feature_for_request('POST','/message:send') == 'protocol'; assert feature_for_request('GET','/api/missions') is None; assert paths.count('/api/commercial/status') == 1; assert paths.count('/api/commercial/license/import') == 1; assert paths.count('/api/commercial/brand') == 2; assert paths.count('/api/commercial/deployments') == 2; assert paths.count('/api/commercial/releases') == 1; assert paths.count('/metrics') == 1; assert paths.count('/api/health') == 1; assert permission_for_request('POST','/api/commercial/license/import') == 'commercial:license:manage'; assert permission_for_request('PUT','/api/commercial/brand') == 'commercial:brand:manage'; assert 'commercial:license:manage' in EXECUTION_ACTIONS"
       - name: Generate SPDX dependency inventory
         run: |
           docker run --rm beezaoffice:test python -c "import importlib.metadata as m,json; packages=sorted([{'name':d.metadata.get('Name',d.metadata.get('Summary','unknown')),'version':d.version} for d in m.distributions()],key=lambda x:x['name'].lower()); print(json.dumps({'spdxVersion':'SPDX-2.3','dataLicense':'CC0-1.0','SPDXID':'SPDXRef-DOCUMENT','name':'BeezaOffice-Python-Dependencies','documentNamespace':'https://beezaoffice.local/sbom/python','packages':[{'SPDXID':'SPDXRef-Package-'+str(i),'name':p['name'],'versionInfo':p['version'],'downloadLocation':'NOASSERTION','filesAnalyzed':False} for i,p in enumerate(packages)]},indent=2))" > sbom.spdx.json
