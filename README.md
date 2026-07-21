@@ -1,307 +1,197 @@
 # BeezaOffice
 
-**AI Workforce Operating System** for operating an organization of 10–1,000 governed AI agents.
+**AI Workforce Operating System** for operating 10–1,000 governed AI agents across private, sovereign and enterprise environments.
 
-BeezaOffice is an operations-first command center where agents receive missions, collaborate across runtimes, hold structured meetings, route work intelligently, preserve evidence, verify results, turn successful work into versioned SOPs and expose accountable work through standard agent protocols.
+BeezaOffice is the command and governance plane above OpenClaw, CherryAgent, Hermes Agent and thClaws. It turns agent work into durable missions with collaboration, meetings, intelligent routing, evidence verification, reusable SOPs, standard protocols and enterprise controls.
 
-## Current system
+## Current platform
 
-- FastAPI control and protocol plane
-- PostgreSQL durable state
-- Redis workers, cursors and distributed locks
-- Docker Compose deployment
-- OpenClaw, CherryAgent, Hermes Agent and thClaws Runtime Mesh
-- Mission queue, War Room, live events, approvals and audit
+| Phase | Capability |
+|---:|---|
+| 2 | Runtime dispatch, synchronization, remote output, safe stop and approvals |
+| 3 | Durable runtime-event stream and mission SSE |
+| 4 | Typed Collaboration Bus, dependencies, mailbox, retry and escalation |
+| 5 | Structured agent meetings, bounded rounds and human decisions |
+| 6 | Identity, RBAC, clearance, policy, budget, approvals, kill switch and hash-chained audit |
+| 7 | Agent Registry, organization graph, skills, capacity, reliability and delegation |
+| 8 | Intelligent Agent/Runtime/Model routing, cost control, backpressure and failover |
+| 9 | Evidence evaluation, acceptance checks, provenance, replay and quality scoring |
+| 10 | Versioned SOP Builder, approval nodes, verification gates and rollback |
+| 11 | A2A, MCP tools subset, OpenAI-compatible API, signed webhooks and protocol events |
+| **12** | **Multi-tenant enterprise platform, OIDC sessions, scoped API keys, rate limits, backup/DR, SIEM, Kubernetes HA and observability** |
 
-### Phase 2 — Runtime Control
+## Phase 12 — Enterprise Platform
 
-- Runtime dispatch and status synchronization
-- Remote output capture
-- Hermes safe stop and approvals
+### Multi-tenant control plane
 
-### Phase 3 — Unified Event Stream
+Each tenant has:
 
-- Durable runtime events
-- Server-side synchronization
-- Mission-scoped SSE
-- CherryAgent and Hermes event capture
+- Tenant key, slug and lifecycle status
+- Data region and deployment namespace
+- Row, schema or database isolation policy
+- Agent and concurrent-task quotas
+- Requests-per-minute limit
+- Object-storage bucket and encryption-key reference
+- Retention policy and air-gap mode
 
-### Phase 4 — Collaboration Bus
+Existing resources are assigned to `tenant:beeza` on first startup. New Mission, Protocol and SOP resources inherit the active request tenant.
 
-- Typed cross-runtime handoffs
-- Work contracts and dependencies
-- Runtime mailbox
-- Human review, revision and retry
-- Follow-up watchdog and escalation
+### Enterprise authentication
 
-### Phase 5 — Agent Meeting Manager
+BeezaOffice accepts three credential types:
 
-- Structured agendas and participant roles
-- Turn-based discussion across runtimes
-- Bounded rounds
-- Human decision gate
-- Decisions converted into action items
+```text
+BEEZA_AUTH_TOKEN     bootstrap / private operator token
+bzsess_...           short-lived OIDC-backed enterprise session
+bzk_...              tenant-scoped machine API key
+```
 
-### Phase 6 — Governance and Identity
+OIDC exchange verifies issuer, audience, expiry, issue time and the configured JWKS signing key. Auto-provisioned users receive a governed identity and tenant-scoped role binding.
 
-- Human, agent, service and runtime identities
-- Scoped RBAC
-- Data clearance
-- Risk and cost-aware policy
-- Independent approval
-- Per-identity budgets
-- Emergency execution kill switch
-- Hash-chained audit ledger
+API keys are displayed once. Only the SHA-256 hash, prefix, tenant, identity, scopes, rate limit and expiry are stored.
 
-### Phase 7 — Agent Registry and Organization Graph
+### Tenant isolation and rate limiting
 
-- Directory designed for 1,000 logical agents
-- Department and manager graph
-- Lifecycle, availability and heartbeat
-- Runtime/model preference
-- Concurrency, workload and capacity
-- Reliability, skills, capabilities and tools
-- Delegation
+```text
+Credential
+→ resolve identity and tenant
+→ enforce API-key scope
+→ Redis tenant/identity rate limit
+→ verify resource ownership
+→ Phase 6 Governance
+→ execute request
+```
 
-### Phase 8 — Scheduler and Intelligent Router
+Mission list/create/detail and Protocol task lists are tenant-aware. Mission-linked operations return `404` when the active tenant does not own the resource.
 
-- Smart tasks without a named agent
-- Eligibility filtering
-- Explainable weighted routing
-- Runtime-pool capacity
-- Cost and deadline awareness
-- Retry, backpressure and failover
-- Safe reroute controls
+### Backup and DR
 
-### Phase 9 — Evaluation, Verification and Replay
+Backup plans and runs are tracked in the control plane. Privileged backup commands execute through an approved external runner rather than inside the web process.
 
-- Evidence-quality evaluation
-- Acceptance-criteria coverage
-- Runtime provenance
-- Completeness, consistency and reproducibility checks
-- `PASS`, `WARN` and `FAIL`
-- Controlled replay and score comparison
-- Verified quality blended into Registry reliability
+```text
+Backup request
+→ signed manifest
+→ pg_dump + Redis RDB + evidence/config copy
+→ immutable S3/MinIO destination
+→ governed completion callback
+→ restore exercise
+```
 
-### Phase 10 — SOP Builder and Workflow Templates
+Scripts:
 
-- Draft, published and deprecated lifecycle
-- Immutable checksummed versions
-- Dependency graph and cycle validation
-- Task and human-approval nodes
-- Scheduler and Collaboration integration
-- Phase 9 verification gates
-- Reverse-order compensation work
-- Derive draft SOPs from `PASS`-verified missions
+```text
+deploy/backup/run-backup.sh
+deploy/backup/restore-backup.sh
+```
 
-### Phase 11 — Protocol Gateway
+A requested backup is not considered verified until the executor reports `COMPLETED` and the archive checksum is retained.
 
-- A2A 1.0 HTTP+JSON ingress
-- Public and extended Agent Cards
-- A2A task send, list, poll, cancel and SSE subscribe
-- MCP `2025-06-18` stateless JSON-RPC tools subset
-- OpenAI-compatible Chat Completions ingress
-- Bearer or HMAC webhook task/SOP triggers
-- Durable protocol event stream
-- Idempotent external requests and webhook receipts
-- Protocol task mapping to Mission and Collaboration Task
-- Governance enforcement and audit on external execution
+### SIEM and audit export
 
-BeezaOffice remains the command and governance plane. Connected runtimes keep their own tools, skills, memory, sessions, sandboxes and local approval policies.
+Tenant-scoped audit records can be exported using an at-least-once cursor while preserving the audit hash chain.
+
+```text
+GET  /api/enterprise/siem/export?after_id=0&limit=500
+POST /api/enterprise/siem/sinks/{sink_key}/checkpoint?last_audit_id=...
+```
+
+### HA and Kubernetes
+
+`deploy/k8s/beezaoffice.yaml` provides a production baseline with:
+
+- Three control-plane replicas
+- Rolling updates
+- Liveness and readiness probes
+- Pod disruption budget
+- Horizontal autoscaling
+- Non-root/read-only security context
+- Default-deny NetworkPolicy
+- Topology spreading
+- External PostgreSQL HA, Redis HA and object-storage references
+
+### Observability and supply chain
+
+```text
+GET /health/live
+GET /health/ready
+GET /metrics
+GET /api/health
+```
+
+CI compiles all Phase 1–12 modules, checks browser JavaScript, builds the image, runs enterprise smoke tests and publishes an SPDX 2.3 dependency inventory artifact.
 
 ## Quick deploy
 
 ```bash
 cp .env.example .env
-# Set strong PostgreSQL and BeezaOffice credentials.
-# Set BEEZA_PUBLIC_URL to the externally reachable HTTPS origin.
-# Configure only the runtimes that will be used.
-docker compose -f compose.yml up -d --build
+nano .env
+
+docker compose -f compose.yml up -d --build --force-recreate
+docker compose -f compose.yml ps
+docker compose -f compose.yml logs -f beezaoffice
 ```
 
-Open:
-
-- Command Center: `http://localhost:8080`
-- Health: `http://localhost:8080/api/health`
-- API docs: `http://localhost:8080/docs`
-- Protocol status: `http://localhost:8080/api/protocol/status`
-- Public Agent Card: `http://localhost:8080/.well-known/agent-card.json`
-- SOP engine: `http://localhost:8080/api/sop/status`
-- Evaluator: `http://localhost:8080/api/evaluation/status`
-- Scheduler: `http://localhost:8080/api/scheduler/status`
-- Agent Registry: `http://localhost:8080/api/registry/stats`
-- Governance: `http://localhost:8080/api/governance/context`
-
-## Core configuration
+Required production changes:
 
 ```env
+POSTGRES_PASSWORD=SET_A_STRONG_PASSWORD
+DATABASE_URL=postgresql+psycopg://beeza:THE_SAME_PASSWORD@postgres:5432/beezaoffice
 BEEZA_AUTH_TOKEN=SET_A_LONG_RANDOM_TOKEN
 BEEZA_PUBLIC_URL=https://beeza.example.com
-
-BEEZA_GOVERNANCE_ENFORCED=true
-BEEZA_DEFAULT_IDENTITY=human:owner
-BEEZA_APPROVAL_TTL_MINUTES=60
-
-BEEZA_RUNTIME_SYNC_ENABLED=true
-BEEZA_RUNTIME_SYNC_INTERVAL_SECONDS=5
-
-BEEZA_COLLAB_ENABLED=true
-BEEZA_COLLAB_INTERVAL_SECONDS=3
-BEEZA_COLLAB_FOLLOW_UP_SECONDS=300
-BEEZA_COLLAB_MAX_FOLLOW_UPS=2
-
-BEEZA_MEETING_ENABLED=true
-BEEZA_MEETING_INTERVAL_SECONDS=3
-
-BEEZA_SCHEDULER_ENABLED=true
-BEEZA_SCHEDULER_INTERVAL_SECONDS=3
-BEEZA_SCHEDULER_FAILOVER_ATTEMPTS=3
-
-BEEZA_EVALUATOR_ENABLED=true
-BEEZA_EVALUATOR_INTERVAL_SECONDS=10
-
-BEEZA_SOP_ENABLED=true
-BEEZA_SOP_INTERVAL_SECONDS=3
-
-BEEZA_PROTOCOL_ENABLED=true
-BEEZA_PROTOCOL_INTERVAL_SECONDS=2
-BEEZA_PROTOCOL_SYNC_TIMEOUT_SECONDS=20
-BEEZA_WEBHOOK_SECRET=
+BEEZA_DEFAULT_TENANT=tenant:beeza
 ```
 
-## Governance headers
+For OIDC, backup and object storage also configure:
 
-```text
-Authorization: Bearer <BEEZA_AUTH_TOKEN>
-X-Beeza-Identity: human:owner
-X-Beeza-Risk-Level: NORMAL
-X-Beeza-Data-Classification: INTERNAL
-X-Beeza-Estimated-Cost-USD: 0
-X-Beeza-Approval-Key: APR-...
+```env
+BEEZA_OBJECT_STORE_ENDPOINT=https://minio.example.com
+BEEZA_OBJECT_STORE_BUCKET=beeza-evidence
+BEEZA_BACKUP_BUCKET=beeza-backups
+BEEZA_BACKUP_ENCRYPTION_KEY_REF=vault://beeza/backup-key
+BEEZA_MCP_ALLOWED_ORIGINS=https://console.example.com
 ```
 
-The Command Center sets these headers for governed browser operations. External A2A, OpenAI-compatible and webhook execution is also evaluated through Governance and recorded in the audit ledger.
-
-## Seeded service identities
-
-| Identity | Purpose |
-|---|---|
-| `service:runtime` | Runtime dispatch |
-| `service:collaboration` | Collaboration scheduler |
-| `service:meeting` | Structured meeting worker |
-| `service:scheduler` | Intelligent router |
-| `service:evaluator` | Evidence evaluation and replay |
-| `service:sop` | SOP graph execution and rollback |
-| `service:protocol` | A2A, MCP, OpenAI-compatible and webhook gateway |
-
-## Protocol Gateway
-
-### A2A discovery
+## Enterprise API
 
 ```text
-GET /.well-known/agent-card.json
-GET /extendedAgentCard
+GET  /api/enterprise/status
+GET  /api/enterprise/tenants
+POST /api/enterprise/tenants
+
+GET  /api/enterprise/identity-providers
+POST /api/enterprise/identity-providers
+POST /api/enterprise/identity-providers/{provider_key}/discover
+POST /enterprise/sso/oidc/exchange
+
+GET    /api/enterprise/api-keys
+POST   /api/enterprise/api-keys
+DELETE /api/enterprise/api-keys/{key_id}
+
+GET  /api/enterprise/sites
+GET  /api/enterprise/backup/plans
+POST /api/enterprise/backup/plans
+GET  /api/enterprise/backup/runs
+POST /api/enterprise/backup/plans/{plan_key}/runs
+POST /api/enterprise/backup/runs/{run_key}/complete
+
+GET  /api/enterprise/siem/sinks
+POST /api/enterprise/siem/sinks
+GET  /api/enterprise/siem/export
+POST /api/enterprise/siem/sinks/{sink_key}/checkpoint
 ```
 
-### A2A operations
+## Protocol endpoints
 
 ```text
+GET  /.well-known/agent-card.json
 POST /message:send
 GET  /tasks
 GET  /tasks/{task_id}
 POST /tasks/{task_id}:cancel
 GET  /tasks/{task_id}:subscribe
-```
-
-Example:
-
-```bash
-curl -X POST http://localhost:8080/message:send \
-  -H "Authorization: Bearer $BEEZA_AUTH_TOKEN" \
-  -H "X-Beeza-Identity: human:owner" \
-  -H "A2A-Version: 1.0" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": {
-      "messageId": "example-001",
-      "role": "ROLE_USER",
-      "parts": [{"text": "Investigate the service alert and return verified evidence."}],
-      "metadata": {
-        "priority": "HIGH",
-        "requiredSkills": ["metrics", "evidence"]
-      }
-    },
-    "configuration": {"returnImmediately": true}
-  }'
-```
-
-### MCP
-
-```text
 POST /mcp
-```
-
-Supported methods:
-
-```text
-initialize
-notifications/initialized
-ping
-tools/list
-tools/call
-```
-
-Tools:
-
-```text
-beeza_list_agents
-beeza_create_task
-beeza_get_task
-beeza_run_sop
-```
-
-### OpenAI-compatible ingress
-
-```text
 POST /v1/chat/completions
-```
-
-Models:
-
-```text
-beeza/auto
-beeza/openclaw
-beeza/cherryagent
-beeza/hermes
-beeza/thclaws
-```
-
-Phase 11 supports `stream=false`. Long work returns an accepted task envelope with a polling URL instead of pretending that remote execution completed synchronously.
-
-### Webhook ingress
-
-```text
 POST /hooks/{channel}
-```
-
-Modes:
-
-```text
-task
-sop
-```
-
-Authentication uses the Beeza bearer token or `X-Beeza-Signature: sha256=...` when `BEEZA_WEBHOOK_SECRET` is configured. Channel and idempotency key prevent duplicate work.
-
-### Protocol monitoring API
-
-```text
-GET  /api/protocol/status
-POST /api/protocol/tick
-GET  /api/protocol/tasks
-GET  /api/protocol/events
-GET  /api/protocol/events/stream
-GET  /api/protocol/webhook-receipts
 ```
 
 ## Runtime configuration
@@ -327,13 +217,11 @@ THCLAW_WORKSPACE_DIR=
 ## Architecture
 
 ```text
-External A2A / MCP / OpenAI / Webhook Client
-        ↓ authentication + protocol identity
-Protocol Gateway Task
+Enterprise Identity / API Key
+        ↓ tenant + quota + rate limit
+Governance and Audit
         ↓
-Mission + Collaboration Task or SOP Run
-        ↓
-Governance
+Mission / Meeting / Collaboration / SOP / Protocol
         ↓
 Agent Registry + Intelligent Scheduler
         ↓
@@ -341,33 +229,26 @@ OpenClaw / CherryAgent / Hermes / thClaws
         ↓
 Runtime Events + Evidence
         ↓
-Evaluation PASS / WARN / FAIL
+Evaluation + Approval + Replay
         ↓
-Protocol Status + Artifact + SSE
+Verified Outcome / SIEM / Executive Reporting
 ```
 
-## Product direction
+## Enterprise boundary
 
-1. Workforce Kernel
-2. Durable Mission Runtime
-3. Collaboration Protocol
-4. Structured Meetings and Decisions
-5. Governance and Identity
-6. Agent Registry and Organization Graph
-7. Scheduler and Runtime Pool
-8. Evaluation, Verification and Replay
-9. SOP Builder and Workflow Templates
-10. Protocol Gateway
-11. Enterprise Platform
-12. Executive and Business Layer
-13. Scale and Marketplace
+Phase 12 provides the software control-plane baseline. Production readiness still requires site-owned infrastructure and operations:
 
-Architecture documents:
+- Real PostgreSQL and Redis HA
+- TLS ingress and certificate rotation
+- KMS/HSM or Vault-backed key references
+- S3/MinIO object lock
+- OIDC/SAML/LDAP provider configuration
+- Backup restore drills and DR exercises
+- Container signing identity and admission policy
+- Capacity testing and incident runbooks
 
-- `docs/PHASE-6-GOVERNANCE.md`
-- `docs/PHASE-7-AGENT-REGISTRY.md`
-- `docs/PHASE-8-SCHEDULER-ROUTER.md`
-- `docs/PHASE-9-EVALUATION.md`
-- `docs/PHASE-10-SOP-BUILDER.md`
-- `docs/PHASE-11-PROTOCOL-GATEWAY.md`
-- `docs/RUNTIME-INTEGRATIONS.md`
+Detailed architecture: `docs/PHASE-12-ENTERPRISE-PLATFORM.md`.
+
+## Next phase
+
+**Phase 13 — Executive & Business Layer:** outcome KPIs, verified-work economics, cost savings, departmental scorecards, billing, industry packs and marketplace packaging.
