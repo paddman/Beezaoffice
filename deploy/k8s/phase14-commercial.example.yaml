@@ -1,0 +1,51 @@
+# Example overlay values for the Phase 14 commercial runtime.
+# Replace every CHANGE_ME value, pin the image by digest, and store the license
+# token/public key in an approved external secret manager before production use.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: beezaoffice-commercial
+  namespace: beezaoffice
+type: Opaque
+stringData:
+  BEEZA_LICENSE_PUBLIC_KEY: |
+    -----BEGIN PUBLIC KEY-----
+    CHANGE_ME
+    -----END PUBLIC KEY-----
+  BEEZA_LICENSE_TOKEN: CHANGE_ME_SIGNED_LICENSE_JWT
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beezaoffice-commercial
+  namespace: beezaoffice
+data:
+  BEEZA_LICENSE_MODE: enforce
+  BEEZA_DEPLOYMENT_ID: deployment:customer-primary
+  BEEZA_LICENSE_ISSUER: beezaoffice-license
+  BEEZA_LICENSE_AUDIENCE: beezaoffice
+  BEEZA_LICENSE_ALGORITHMS: EdDSA,RS256,ES256
+  BEEZA_RELEASE_IMAGE: ghcr.io/paddman/beezaoffice:0.15.0
+---
+# Apply these fields to the existing beezaoffice Deployment using Kustomize,
+# Helm or the site's approved GitOps renderer.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beezaoffice
+  namespace: beezaoffice
+spec:
+  template:
+    spec:
+      containers:
+        - name: beezaoffice
+          image: ghcr.io/paddman/beezaoffice@sha256:CHANGE_ME
+          envFrom:
+            - configMapRef:
+                name: beezaoffice-config
+            - configMapRef:
+                name: beezaoffice-commercial
+            - secretRef:
+                name: beezaoffice-secrets
+            - secretRef:
+                name: beezaoffice-commercial
