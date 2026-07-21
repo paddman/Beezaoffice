@@ -6,6 +6,7 @@ import commercial_license_hardening  # noqa: F401 — strict JWT claim and featu
 import commercial_hardening  # noqa: F401 — contract/license intersection and quotas
 import commercial_quota_hardening  # noqa: F401 — tenant quota and enterprise feature access
 import phase14_release  # noqa: F401 — signed release manifest publishing
+import commercial_status_hardening  # noqa: F401 — signed digest-matched go-live readiness
 import phase14_observability  # noqa: F401 — commercial health and Prometheus metrics
 import commercial_request_context  # noqa: F401 — resolve session/API-key tenant before licensing
 from main import app
