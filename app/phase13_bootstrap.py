@@ -25,6 +25,7 @@ def phase13_meter_for_request(request):
 
 phase13_app.meter_for_request = phase13_meter_for_request
 
+import business_hardening  # noqa: E402,F401 — idempotent KPI sync and lock ownership
 import phase13_observability  # noqa: E402,F401 — business health and Prometheus metrics
 
 app.version = "0.14.0"
