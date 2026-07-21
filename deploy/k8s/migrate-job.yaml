@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: beezaoffice-schema-migrate
+  namespace: beezaoffice
+  labels:
+    app: beezaoffice
+    component: schema-migration
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: beezaoffice
+        component: schema-migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: beezaoffice
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/paddman/beezaoffice@sha256:CHANGE_ME
+          imagePullPolicy: IfNotPresent
+          command: ["alembic"]
+          args: ["-c", "alembic.ini", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: beezaoffice-config
+            - configMapRef:
+                name: beezaoffice-commercial
+                optional: true
+            - secretRef:
+                name: beezaoffice-secrets
+            - secretRef:
+                name: beezaoffice-commercial
+                optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            runAsUser: 10001
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: beezaoffice
+      POSTGRES_USER: beeza
+      POSTGRES_PASSWORD: pilot-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beeza -d beezaoffice"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  beezaoffice:
+    image: ${BEEZA_IMAGE:-beezaoffice:pilot}
+    environment:
+      APP_ENV: pilot
+      DATABASE_URL: postgresql+psycopg://beeza:pilot-password@postgres:5432/beezaoffice
+      REDIS_URL: redis://redis:6379/0
+      BEEZA_AUTH_TOKEN: pilot-token
+      BEEZA_METRICS_TOKEN: pilot-metrics-token
+      BEEZA_PUBLIC_URL: http://127.0.0.1:18080
+      BEEZA_DEFAULT_TENANT: tenant:beeza
+      BEEZA_LICENSE_MODE: development
+      BEEZA_DEPLOYMENT_ID: deployment:pilot-gate
+      BEEZA_SCHEMA_STRICT: "true"
+      BEEZA_BUSINESS_ENABLED: "false"
+      BEEZA_RUNTIME_SYNC_ENABLED: "false"
+      BEEZA_COLLAB_ENABLED: "false"
+      BEEZA_MEETING_ENABLED: "false"
+      BEEZA_SCHEDULER_ENABLED: "false"
+      BEEZA_EVALUATOR_ENABLED: "false"
+      BEEZA_SOP_ENABLED: "false"
+      BEEZA_PROTOCOL_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 40
+      start_period: 20s

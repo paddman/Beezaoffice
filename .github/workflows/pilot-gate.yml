@@ -1,0 +1,94 @@
+name: Pilot Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase14.1-pilot-gate
+
+permissions:
+  contents: read
+
+jobs:
+  pilot-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BEEZA_IMAGE: beezaoffice:pilot
+      COMPOSE_FILE: deploy/pilot/compose.yml
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Phase 14 image
+        run: docker build -t "$BEEZA_IMAGE" ./app
+
+      - name: Start PostgreSQL and Redis
+        run: docker compose -f "$COMPOSE_FILE" up -d postgres redis
+
+      - name: Apply Alembic migrations
+        run: |
+          docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
+            alembic -c alembic.ini upgrade head
+          docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
+            python -c "from main import engine; from schema_service import schema_status; s=schema_status(engine); print(s); assert s['up_to_date']"
+
+      - name: Start migration-strict application
+        run: docker compose -f "$COMPOSE_FILE" up -d beezaoffice
+
+      - name: Run tenant-isolation pilot gate
+        run: |
+          python tests/pilot_gate.py \
+            --base-url http://127.0.0.1:18080 \
+            --state pilot-state.json \
+            --mode prepare
+
+      - name: Create PostgreSQL recovery point
+        run: |
+          docker compose -f "$COMPOSE_FILE" exec -T postgres \
+            pg_dump -U beeza --format=custom --compress=9 beezaoffice \
+            > pilot-postgres.dump
+          test -s pilot-postgres.dump
+
+      - name: Destroy and restore database
+        run: |
+          docker compose -f "$COMPOSE_FILE" stop beezaoffice
+          docker compose -f "$COMPOSE_FILE" exec -T postgres \
+            dropdb -U beeza --if-exists beezaoffice
+          docker compose -f "$COMPOSE_FILE" exec -T postgres \
+            createdb -U beeza beezaoffice
+          cat pilot-postgres.dump | docker compose -f "$COMPOSE_FILE" exec -T postgres \
+            pg_restore -U beeza --dbname=beezaoffice --no-owner --exit-on-error
+          docker compose -f "$COMPOSE_FILE" up -d beezaoffice
+
+      - name: Verify restored tenant isolation and schema revision
+        run: |
+          python tests/pilot_gate.py \
+            --base-url http://127.0.0.1:18080 \
+            --state pilot-state.json \
+            --mode verify
+
+      - name: Capture diagnostics
+        if: always()
+        run: |
+          docker compose -f "$COMPOSE_FILE" ps > pilot-compose-ps.txt || true
+          docker compose -f "$COMPOSE_FILE" logs --no-color > pilot-compose.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase14-pilot-gate-diagnostics
+          path: |
+            pilot-state.json
+            pilot-compose-ps.txt
+            pilot-compose.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop pilot environment
+        if: always()
+        run: docker compose -f "$COMPOSE_FILE" down -v --remove-orphans

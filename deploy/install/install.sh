@@ -6,6 +6,7 @@ INSTALL_DIR="${BEEZA_INSTALL_DIR:-/opt/beezaoffice}"
 COMPOSE_SOURCE="${SCRIPT_DIR}/compose.production.yml"
 COMPOSE_FILE="${INSTALL_DIR}/compose.yml"
 ENV_FILE="${INSTALL_DIR}/.env"
+MIGRATION_BACKUP_DIR="${INSTALL_DIR}/migration-backups"
 BEEZA_IMAGE="${BEEZA_IMAGE:-ghcr.io/paddman/beezaoffice:0.15.0}"
 BEEZA_LICENSE_MODE="${BEEZA_LICENSE_MODE:-enforce}"
 BEEZA_SKIP_SIGNATURE_VERIFY="${BEEZA_SKIP_SIGNATURE_VERIFY:-false}"
@@ -39,7 +40,7 @@ else
 fi
 
 umask 077
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR" "$MIGRATION_BACKUP_DIR"
 cp "$COMPOSE_SOURCE" "$COMPOSE_FILE"
 
 random_hex() {
@@ -87,6 +88,7 @@ BEEZA_LICENSE_ALGORITHMS=${BEEZA_LICENSE_ALGORITHMS:-EdDSA,RS256,ES256}
 BEEZA_LICENSE_PUBLIC_KEY=${BEEZA_LICENSE_PUBLIC_KEY:-}
 BEEZA_LICENSE_TOKEN=${BEEZA_LICENSE_TOKEN:-}
 
+BEEZA_SCHEMA_STRICT=true
 BEEZA_GOVERNANCE_ENFORCED=true
 BEEZA_BUSINESS_ENABLED=true
 BEEZA_BUSINESS_INTERVAL_SECONDS=60
@@ -102,6 +104,7 @@ EOF
   log "Created protected environment file at $ENV_FILE"
 else
   log "Preserving existing environment file at $ENV_FILE"
+  grep -q '^BEEZA_SCHEMA_STRICT=' "$ENV_FILE" || printf '\nBEEZA_SCHEMA_STRICT=true\n' >> "$ENV_FILE"
 fi
 
 if [ "$BEEZA_LICENSE_MODE" = "enforce" ]; then
@@ -112,8 +115,28 @@ fi
 cd "$INSTALL_DIR"
 log "Pulling production images"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull
+
+log "Starting PostgreSQL and Redis"
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d postgres redis
+
+if docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T postgres \
+  psql -U beeza -d beezaoffice -Atqc "SELECT to_regclass('public.missions')" \
+  | grep -q missions; then
+  BACKUP_FILE="${MIGRATION_BACKUP_DIR}/pre-migration-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  log "Creating pre-migration PostgreSQL backup: $BACKUP_FILE"
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T postgres \
+    pg_dump -U beeza --format=custom --compress=9 beezaoffice > "$BACKUP_FILE"
+  test -s "$BACKUP_FILE" || fail "Pre-migration backup is empty"
+fi
+
+log "Applying versioned Alembic migrations"
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm beezaoffice \
+  alembic -c alembic.ini upgrade head
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm beezaoffice \
+  python -c "from main import engine; from schema_service import schema_status; s=schema_status(engine); print(s); assert s['up_to_date']"
+
 log "Starting BeezaOffice"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d beezaoffice --remove-orphans
 
 attempt=0
 until docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T beezaoffice \
@@ -185,4 +208,4 @@ fi
 log "BeezaOffice is ready"
 log "Install directory: $INSTALL_DIR"
 log "Local endpoint: ${BEEZA_PUBLIC_URL:-http://127.0.0.1:${APP_PORT:-8080}}"
-log "Keep $ENV_FILE private and back it up through the approved secret-management process"
+log "Keep $ENV_FILE and migration backups private"
