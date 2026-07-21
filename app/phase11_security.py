@@ -9,11 +9,8 @@ from fastapi.responses import JSONResponse
 
 import phase11_runtime  # noqa: F401 — install governed Phase 11 runtime
 from main import app
-from protocol_service import MCP_PROTOCOL_VERSION if False else PROTOCOL_PUBLIC_URL
-
-# protocol_service exposes the public origin; the negotiated MCP revision is fixed
-# by phase11_app. Import it separately to avoid circular initialization surprises.
-from phase11_app import MCP_PROTOCOL_VERSION  # noqa: E402
+from phase11_app import MCP_PROTOCOL_VERSION
+from protocol_service import PROTOCOL_PUBLIC_URL
 
 
 def origin_of(value: str) -> str:
