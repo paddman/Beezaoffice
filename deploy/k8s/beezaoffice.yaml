@@ -1,0 +1,207 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: beezaoffice
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beezaoffice
+  namespace: beezaoffice
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: beezaoffice-secrets
+  namespace: beezaoffice
+type: Opaque
+stringData:
+  DATABASE_URL: postgresql+psycopg://beeza:CHANGE_ME@postgresql-rw.database.svc:5432/beezaoffice
+  REDIS_URL: redis://redis-master.cache.svc:6379/0
+  BEEZA_AUTH_TOKEN: CHANGE_ME
+  BEEZA_WEBHOOK_SECRET: CHANGE_ME
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beezaoffice-config
+  namespace: beezaoffice
+data:
+  APP_ENV: production
+  BEEZA_PUBLIC_URL: https://beeza.example.com
+  BEEZA_DEFAULT_TENANT: tenant:beeza
+  BEEZA_GOVERNANCE_ENFORCED: "true"
+  BEEZA_RUNTIME_SYNC_ENABLED: "true"
+  BEEZA_COLLAB_ENABLED: "true"
+  BEEZA_MEETING_ENABLED: "true"
+  BEEZA_SCHEDULER_ENABLED: "true"
+  BEEZA_EVALUATOR_ENABLED: "true"
+  BEEZA_SOP_ENABLED: "true"
+  BEEZA_PROTOCOL_ENABLED: "true"
+  BEEZA_OBJECT_STORE_ENDPOINT: https://minio.storage.svc:9000
+  BEEZA_OBJECT_STORE_BUCKET: beeza-evidence
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beezaoffice
+  namespace: beezaoffice
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: beezaoffice
+  template:
+    metadata:
+      labels:
+        app: beezaoffice
+    spec:
+      serviceAccountName: beezaoffice
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: beezaoffice
+          image: ghcr.io/paddman/beezaoffice:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: beezaoffice-config
+            - secretRef:
+                name: beezaoffice-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            runAsUser: 10001
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: beezaoffice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beezaoffice
+  namespace: beezaoffice
+spec:
+  selector:
+    app: beezaoffice
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: beezaoffice
+  namespace: beezaoffice
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: beezaoffice
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: beezaoffice
+  namespace: beezaoffice
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: beezaoffice
+  minReplicas: 3
+  maxReplicas: 12
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: beezaoffice-default-deny
+  namespace: beezaoffice
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: beezaoffice-control-plane
+  namespace: beezaoffice
+spec:
+  podSelector:
+    matchLabels:
+      app: beezaoffice
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 9000
