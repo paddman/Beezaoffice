@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import phase11_runtime  # noqa: F401 — install hardened Phase 11 runtime
+import phase11_security  # noqa: F401 — install governed and secured Phase 11 runtime
 from main import app
 
 app.version = "0.12.0"
