@@ -59,6 +59,8 @@ def main() -> None:
             "permissions-policy": "camera=()",
             "cache-control": "no-store",
         }
+        if args.base_url.lower().startswith("https://"):
+            required["strict-transport-security"] = "max-age="
         missing = [
             key for key, value in required.items() if value not in headers.get(key, "")
         ]
@@ -75,18 +77,19 @@ def main() -> None:
         return "server" not in headers, f"server={headers.get('server')}"
 
     def oversized_body_rejected() -> tuple[bool, str]:
+        oversized = b"x" * 2_097_153
         status, _, _ = public_request(
             args.base_url,
             "POST",
             "/api/missions",
             token=args.token,
-            payload=b"{}",
+            payload=oversized,
             headers={
                 "X-Beeza-Identity": "human:owner",
                 "X-Beeza-Tenant": args.tenant,
-                "Content-Type": "application/json",
-                "Content-Length": "999999999",
+                "Content-Type": "application/octet-stream",
             },
+            timeout=30,
         )
         return status == 413, f"HTTP {status}"
 
@@ -101,15 +104,6 @@ def main() -> None:
         return headers.get("x-beeza-tenant") == args.tenant, headers.get("x-beeza-tenant", "missing")
 
     def license_context_present() -> tuple[bool, str]:
-        _, _, headers = api(
-            args.base_url,
-            "GET",
-            "/api/commercial/status",
-            token=args.token,
-            tenant=args.tenant,
-        )
-        # Commercial recovery endpoints bypass execution enforcement, so inspect
-        # the authenticated status payload instead of requiring a license header.
         _, body, _ = api(
             args.base_url,
             "GET",
