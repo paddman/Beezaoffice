@@ -148,6 +148,8 @@ def idempotent_sync_outcomes(db: Session, tenant_key: str) -> dict[str, int]:
         row.task_key: {
             "fingerprint": outcome_fingerprint(row),
             "updated_at": row.updated_at,
+            "status": row.status,
+            "result_hash": row.result_hash,
         }
         for row in before_rows
     }
@@ -168,28 +170,36 @@ def idempotent_sync_outcomes(db: Session, tenant_key: str) -> dict[str, int]:
     created = 0
     updated = 0
     unchanged = 0
+    metered_verified = 0
     for row in after_rows:
         previous = before.get(row.task_key)
         if previous is None:
             created += 1
+            if row.status == "VERIFIED":
+                metered_verified += 1
             continue
         if previous["fingerprint"] != outcome_fingerprint(row):
             updated += 1
+            if row.status == "VERIFIED" and (
+                previous["status"] != "VERIFIED"
+                or row.result_hash != previous["result_hash"]
+            ):
+                metered_verified += 1
             continue
         row.updated_at = previous["updated_at"]
         unchanged += 1
 
-    changed = created + updated
-    if changed:
+    if metered_verified:
         _original_record_usage(
             db,
             tenant_key,
             "verified_outcomes",
-            quantity=changed,
+            quantity=metered_verified,
             metadata={
                 "source": "evaluation-sync",
                 "created": created,
                 "updated": updated,
+                "metered_verified": metered_verified,
             },
         )
     db.commit()
@@ -198,6 +208,7 @@ def idempotent_sync_outcomes(db: Session, tenant_key: str) -> dict[str, int]:
         "created": created,
         "updated": updated,
         "unchanged": unchanged,
+        "metered_verified": metered_verified,
         "preserved_manual": int(raw.get("preserved_manual", 0)),
     }
 
@@ -213,6 +224,7 @@ def lock_safe_sync_tenant(db: Session, tenant_key: str) -> dict[str, Any]:
             "created": 0,
             "updated": 0,
             "unchanged": 0,
+            "metered_verified": 0,
         }
     try:
         return {
