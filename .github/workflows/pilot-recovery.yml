@@ -78,6 +78,8 @@ jobs:
           printf '%s\n' "${{ secrets.PILOT_SSH_PRIVATE_KEY }}" > ~/.ssh/pilot_key
           printf '%s\n' "${{ secrets.PILOT_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/pilot_key ~/.ssh/known_hosts
+          ssh-keygen -F "$PILOT_HOST" -f ~/.ssh/known_hosts >/dev/null \
+            || ssh-keygen -F "[$PILOT_HOST]:$PILOT_PORT" -f ~/.ssh/known_hosts >/dev/null
           printf '%s\n' "${{ secrets.PILOT_SECONDARY_LICENSE_TOKEN }}" > secondary-license.jwt
           chmod 600 secondary-license.jwt
 
@@ -134,22 +136,33 @@ jobs:
           compose_file="$install_dir/compose.yml"
           restore_db="beeza_restore_verify_${RUN_ID}"
           work_dir="$install_dir/recovery-verification/$RUN_ID"
+          dump_file="/tmp/beeza-pilot-restore-${RUN_ID}.dump"
+          env_snapshot="/tmp/beeza-pilot-env-${RUN_ID}"
+          export_report="$HOME/beeza-recovery-${RUN_ID}.json"
           $SUDO install -d -m 700 "$work_dir"
+          $SUDO cat "$env_file" > "$env_snapshot"
+          chmod 600 "$env_snapshot"
 
           compose() {
             $SUDO docker compose --env-file "$env_file" -f "$compose_file" "$@"
           }
 
-          postgres_user="$(grep '^POSTGRES_USER=' "$env_file" | head -n1 | cut -d= -f2-)"
-          postgres_db="$(grep '^POSTGRES_DB=' "$env_file" | head -n1 | cut -d= -f2-)"
-          database_url="$(grep '^DATABASE_URL=' "$env_file" | head -n1 | cut -d= -f2-)"
+          postgres_user="$(grep '^POSTGRES_USER=' "$env_snapshot" | head -n1 | cut -d= -f2-)"
+          postgres_db="$(grep '^POSTGRES_DB=' "$env_snapshot" | head -n1 | cut -d= -f2-)"
+          database_url="$(grep '^DATABASE_URL=' "$env_snapshot" | head -n1 | cut -d= -f2-)"
           restore_url="$(printf '%s' "$database_url" | sed "s#/${postgres_db}$#/${restore_db}#")"
 
-          compose exec -T postgres pg_dump -U "$postgres_user" --format=custom --compress=9 "$postgres_db" > /tmp/beeza-pilot-restore.dump
-          test -s /tmp/beeza-pilot-restore.dump
+          cleanup() {
+            compose exec -T postgres dropdb -U "$postgres_user" --if-exists "$restore_db" >/dev/null 2>&1 || true
+            rm -f "$dump_file" "$env_snapshot"
+          }
+          trap cleanup EXIT INT TERM
+
+          compose exec -T postgres pg_dump -U "$postgres_user" --format=custom --compress=9 "$postgres_db" > "$dump_file"
+          test -s "$dump_file"
           compose exec -T postgres dropdb -U "$postgres_user" --if-exists "$restore_db"
           compose exec -T postgres createdb -U "$postgres_user" "$restore_db"
-          cat /tmp/beeza-pilot-restore.dump | compose exec -T postgres pg_restore -U "$postgres_user" --dbname="$restore_db" --no-owner --exit-on-error
+          cat "$dump_file" | compose exec -T postgres pg_restore -U "$postgres_user" --dbname="$restore_db" --no-owner --exit-on-error
 
           live_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$postgres_db" -Atqc "SELECT (SELECT count(*) FROM missions)||':'||(SELECT count(*) FROM enterprise_resource_scopes)||':'||(SELECT count(*) FROM pilot_programs)||':'||(SELECT count(*) FROM pilot_gate_evidence)")"
           restored_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$restore_db" -Atqc "SELECT (SELECT count(*) FROM missions)||':'||(SELECT count(*) FROM enterprise_resource_scopes)||':'||(SELECT count(*) FROM pilot_programs)||':'||(SELECT count(*) FROM pilot_gate_evidence)")"
@@ -164,12 +177,15 @@ jobs:
             "$live_counts" "$restored_counts" "$restored_revision" "$restore_db" \
             | $SUDO tee "$work_dir/recovery-report.json" >/dev/null
           $SUDO chmod 600 "$work_dir/recovery-report.json"
-          compose exec -T postgres dropdb -U "$postgres_user" --if-exists "$restore_db"
-          rm -f /tmp/beeza-pilot-restore.dump
+          $SUDO cp "$work_dir/recovery-report.json" "$export_report"
+          $SUDO chown "$(id -u):$(id -g)" "$export_report"
+          chmod 600 "$export_report"
           REMOTE
           scp -i ~/.ssh/pilot_key -P "$PILOT_PORT" \
-            "$PILOT_USER@$PILOT_HOST:/opt/beezaoffice/recovery-verification/${GITHUB_RUN_ID}/recovery-report.json" \
+            "$PILOT_USER@$PILOT_HOST:~/beeza-recovery-${GITHUB_RUN_ID}.json" \
             recovery-report.json
+          ssh -i ~/.ssh/pilot_key -p "$PILOT_PORT" "$PILOT_USER@$PILOT_HOST" \
+            "rm -f ~/beeza-recovery-${GITHUB_RUN_ID}.json"
 
       - name: Record recovery and rollback evidence
         run: |
