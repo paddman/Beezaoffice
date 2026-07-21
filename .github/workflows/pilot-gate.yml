@@ -1,11 +1,11 @@
-name: Pilot Gate
+name: Pilot Gate 0.16.0
 
 on:
   pull_request:
   workflow_dispatch:
   push:
     branches:
-      - phase14.1-pilot-gate
+      - main
 
 permissions:
   contents: read
@@ -13,9 +13,11 @@ permissions:
 jobs:
   pilot-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
       BEEZA_IMAGE: beezaoffice:pilot
+      BEEZA_APP_VERSION: 0.16.0
+      BEEZA_RELEASE_CHANNEL: pilot
       COMPOSE_FILE: deploy/pilot/compose.yml
     steps:
       - uses: actions/checkout@v4
@@ -24,28 +26,103 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build Phase 14 image
+      - name: Build 0.16.0 pilot image
         run: docker build -t "$BEEZA_IMAGE" ./app
 
-      - name: Start PostgreSQL and Redis
-        run: docker compose -f "$COMPOSE_FILE" up -d postgres redis
+      - name: Generate ephemeral signed Pilot licenses
+        run: |
+          python -m pip install --disable-pip-version-check -r app/requirements.txt
+          python deploy/pilot/prepare_license.py \
+            --tenant-key tenant:beeza \
+            --deployment-id deployment:pilot-gate \
+            --customer-name "BeezaOffice Internal Pilot" \
+            --days 30 \
+            --output-dir .pilot-license
+          python deploy/license/issue-license.py \
+            --private-key .pilot-license/private.pem \
+            --tenant-key tenant:pilot-b \
+            --deployment-id deployment:pilot-gate \
+            --plan-key plan:enterprise \
+            --days 30 \
+            --customer-name "Pilot Tenant B" \
+            --contract-reference "PILOT-ISOLATION" \
+            --output .pilot-license/pilot-b.jwt \
+            --force
+          cat .pilot-license/license.env >> "$GITHUB_ENV"
+
+      - name: Start PostgreSQL Redis and Runtime simulator
+        run: docker compose -f "$COMPOSE_FILE" up -d postgres redis mock-runtime
 
       - name: Apply Alembic migrations
         run: |
           docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
             alembic -c alembic.ini upgrade head
           docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
-            python -c "from main import engine; from schema_service import schema_status; s=schema_status(engine); print(s); assert s['up_to_date']"
+            python -c "from main import engine; from schema_service import schema_status; s=schema_status(engine); print(s); assert s['up_to_date']; assert s['expected_revision']=='20260722_0002'"
 
-      - name: Start migration-strict application
+      - name: Start migration-strict licensed application
         run: docker compose -f "$COMPOSE_FILE" up -d beezaoffice
 
-      - name: Run tenant-isolation pilot gate
+      - name: Run licensed Tenant-isolation gate
         run: |
           python tests/pilot_gate.py \
             --base-url http://127.0.0.1:18080 \
             --state pilot-state.json \
-            --mode prepare
+            --mode prepare \
+            --expected-license-mode enforce \
+            --secondary-license-token-file .pilot-license/pilot-b.jwt
+          echo "PILOT_KEY=$(python -c 'import json; print(json.load(open("pilot-state.json"))["pilot_key"])')" >> "$GITHUB_ENV"
+
+      - name: Record License Schema and Tenant gates
+        run: |
+          python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate license_lifecycle --status PASS --source PILOT_GATE --summary "Primary and secondary Ed25519 licenses verified in enforce mode"
+          python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate schema_migration --status PASS --source PILOT_GATE --summary "Alembic revision 20260722_0002 applied in strict mode"
+          python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate tenant_isolation --status PASS --source PILOT_GATE --summary "Two licensed Tenants remained isolated across Mission reads"
+
+      - name: Run Runtime adapter E2E contract gate
+        run: |
+          python tests/pilot_runtime_e2e.py \
+            --base-url http://127.0.0.1:18080 \
+            --runtimes openclaw,cherryagent,hermes,thclaws \
+            --timeout 60 \
+            --pilot-key "$PILOT_KEY" \
+            --artifact-ref github-actions://pilot-gate/runtime-e2e \
+            --output pilot-runtime-e2e-report.json
+
+      - name: Run HTTP security review gate
+        run: |
+          python tests/pilot_security.py \
+            --base-url http://127.0.0.1:18080 \
+            --minimum-score 90 \
+            --output pilot-security-report.json
+          python tests/pilot_record_gate.py \
+            --pilot-key "$PILOT_KEY" \
+            --gate security_review \
+            --status PASS \
+            --source PILOT_GATE \
+            --summary "Authentication, body limits and response-security baseline passed" \
+            --report pilot-security-report.json \
+            --artifact-ref github-actions://pilot-gate/security
+
+      - name: Run thresholded load gate
+        run: |
+          python tests/pilot_load.py \
+            --base-url http://127.0.0.1:18080 \
+            --path /api/missions \
+            --concurrency 20 \
+            --duration 20 \
+            --max-error-rate 0.01 \
+            --max-p95-ms 1500 \
+            --minimum-rps 5 \
+            --output pilot-load-report.json
+          python tests/pilot_record_gate.py \
+            --pilot-key "$PILOT_KEY" \
+            --gate load_test \
+            --status PASS \
+            --source PILOT_GATE \
+            --summary "20-concurrency load threshold passed" \
+            --report pilot-load-report.json \
+            --artifact-ref github-actions://pilot-gate/load
 
       - name: Create PostgreSQL recovery point
         run: |
@@ -65,12 +142,62 @@ jobs:
             pg_restore -U beeza --dbname=beezaoffice --no-owner --exit-on-error
           docker compose -f "$COMPOSE_FILE" up -d beezaoffice
 
-      - name: Verify restored tenant isolation and schema revision
+      - name: Verify restored Tenant isolation and evidence
         run: |
           python tests/pilot_gate.py \
             --base-url http://127.0.0.1:18080 \
             --state pilot-state.json \
-            --mode verify
+            --mode verify \
+            --expected-license-mode enforce
+          python tests/pilot_record_gate.py \
+            --pilot-key "$PILOT_KEY" \
+            --gate backup_restore \
+            --status PASS \
+            --source PILOT_GATE \
+            --summary "Destructive PostgreSQL restore preserved schema Tenant isolation and Pilot evidence" \
+            --artifact-ref github-actions://pilot-gate/backup-restore
+
+      - name: Verify upgrade and rollback revision path
+        run: |
+          docker compose -f "$COMPOSE_FILE" stop beezaoffice
+          docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
+            alembic -c alembic.ini downgrade 20260721_0001
+          docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
+            alembic -c alembic.ini upgrade head
+          docker compose -f "$COMPOSE_FILE" up -d beezaoffice
+          python tests/pilot_gate.py \
+            --base-url http://127.0.0.1:18080 \
+            --state pilot-state.json \
+            --mode verify \
+            --expected-license-mode enforce
+          python tests/pilot_record_gate.py \
+            --pilot-key "$PILOT_KEY" \
+            --gate upgrade_rollback \
+            --status PASS \
+            --source PILOT_GATE \
+            --summary "Alembic revision marker rolled back and upgraded without Pilot data loss" \
+            --artifact-ref github-actions://pilot-gate/upgrade-rollback
+
+      - name: Capture Pilot readiness
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          request = urllib.request.Request(
+              "http://127.0.0.1:18080/api/pilot/status",
+              headers={
+                  "Authorization": "Bearer pilot-token",
+                  "X-Beeza-Identity": "human:owner",
+                  "X-Beeza-Tenant": "tenant:beeza",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+              data = json.load(response)
+          with open("pilot-readiness.json", "w", encoding="utf-8") as handle:
+              json.dump(data, handle, indent=2, sort_keys=True)
+          summary = data["current"]["summary"]
+          assert summary["passed"] >= 8, summary
+          assert data["production_promotion_allowed"] is False
+          PY
 
       - name: Capture diagnostics
         if: always()
@@ -81,14 +208,19 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: phase14-pilot-gate-diagnostics
+          name: beezaoffice-0.16.0-pilot-gate
           path: |
             pilot-state.json
+            pilot-readiness.json
+            pilot-runtime-e2e-report.json
+            pilot-security-report.json
+            pilot-load-report.json
             pilot-compose-ps.txt
             pilot-compose.log
+            .pilot-license/license-manifest.json
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 14
 
-      - name: Stop pilot environment
+      - name: Stop Pilot environment
         if: always()
         run: docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
