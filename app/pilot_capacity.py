@@ -17,8 +17,6 @@ PILOT_RATE_LIMIT_PER_MINUTE = max(
 
 @app.on_event("startup")
 def provision_pilot_rate_capacity() -> None:
-    if RELEASE_CHANNEL not in {"pilot", "candidate"}:
-        return
     with SessionLocal() as db:
         tenant = db.scalar(
             select(EnterpriseTenant).where(
@@ -29,9 +27,19 @@ def provision_pilot_rate_capacity() -> None:
         if tenant is None:
             return
         settings = dict(tenant.settings or {})
-        settings["pilot_rate_limit_previous"] = tenant.requests_per_minute
-        settings["pilot_rate_limit"] = PILOT_RATE_LIMIT_PER_MINUTE
-        tenant.requests_per_minute = PILOT_RATE_LIMIT_PER_MINUTE
+        if RELEASE_CHANNEL in {"pilot", "candidate"}:
+            if "pilot_rate_limit_original" not in settings:
+                settings["pilot_rate_limit_original"] = int(
+                    settings.get("pilot_rate_limit_previous", tenant.requests_per_minute)
+                )
+            settings["pilot_rate_limit"] = PILOT_RATE_LIMIT_PER_MINUTE
+            tenant.requests_per_minute = PILOT_RATE_LIMIT_PER_MINUTE
+        else:
+            original = settings.pop("pilot_rate_limit_original", None)
+            settings.pop("pilot_rate_limit_previous", None)
+            settings.pop("pilot_rate_limit", None)
+            if original is not None:
+                tenant.requests_per_minute = max(1, int(original))
         tenant.settings = settings
         tenant.updated_at = utcnow()
         db.commit()
