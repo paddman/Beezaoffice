@@ -60,12 +60,16 @@ Automatic records use the following estimation order:
 
 1. Explicit values in Collaboration Task context
 2. Deadline-derived SLA when available
-3. Priority-based baseline and SLA defaults
-4. Actual elapsed time multiplied by the configured estimation factor
+3. Fixed Mission-priority baseline and SLA defaults
+4. Configured labor rate for baseline cost
+
+The baseline is not derived from the observed completion time. This avoids making slow work appear to create proportionally more savings.
 
 Mission budget charges are attributed directly when a ledger entry references the Task. Unassigned Mission charges are divided among evaluated Tasks in that Mission.
 
 Estimated values are marked with `source_mode=ESTIMATED` and carry their assumptions. A `MANUAL` or `IMPORTED` outcome is never overwritten by the automatic worker.
+
+Synchronization is idempotent. The worker fingerprints business-relevant fields, restores the prior update timestamp when nothing changed and increments the verified-outcome meter only for new or meaningfully changed records.
 
 ### Manual outcome entry
 
@@ -73,7 +77,7 @@ Estimated values are marked with `source_mode=ESTIMATED` and carry their assumpt
 POST /api/business/outcomes
 ```
 
-Manual entry is intended for confirmed finance, operations or departmental data. It can replace estimated time, cost and revenue attribution for a Task.
+Manual entry is intended for confirmed finance, operations or departmental data. It can replace estimated time, cost and revenue attribution for a Task. Manual metering occurs only when an outcome becomes `VERIFIED` or receives a new non-empty result hash.
 
 ## Executive metrics
 
@@ -124,12 +128,12 @@ Departments without measured outcomes are not ranked yet.
 
 ## Agent economics
 
-Agent economics groups outcomes by target identity and combines them with Registry and Budget data:
+Agent economics groups outcomes by target identity and combines them with Registry and Budget data for the selected reporting period:
 
 - Verified outcomes
 - Quality score
 - Hours saved
-- Actual governed cost
+- Actual governed cost from the selected Missions
 - Value created
 - Value-to-cost ratio
 - SLA compliance
@@ -233,7 +237,7 @@ BEEZA_BUSINESS_INTERVAL_SECONDS=60
 BEEZA_DEFAULT_LABOR_RATE_USD=30
 ```
 
-Each tenant synchronization uses a Redis `NX` lock. Multiple web replicas can run the worker without intentionally processing the same tenant at the same time.
+Each tenant synchronization uses a Redis `NX` lock with an owner token. Lock release uses compare-and-delete Lua so an expired lock cannot be removed by a previous worker. Multiple web replicas can therefore run the worker without intentionally processing the same tenant at the same time.
 
 Manual synchronization:
 
@@ -292,6 +296,13 @@ beeza_business_installed_packs
 beeza_business_active_subscriptions
 ```
 
+Financial and business metrics require a Bearer token. `BEEZA_METRICS_TOKEN` is used when configured and otherwise falls back to `BEEZA_AUTH_TOKEN`.
+
+```bash
+curl -H "Authorization: Bearer $BEEZA_METRICS_TOKEN" \
+  http://localhost:8080/metrics
+```
+
 `/api/health` reports Phase 13, worker state, measured outcomes and published industry packs.
 
 ## Data-quality boundary
@@ -299,6 +310,7 @@ beeza_business_active_subscriptions
 Business metrics are only as reliable as their sources.
 
 - Automatically calculated time and cost are estimates unless overridden.
+- Default estimates use fixed priority baselines rather than values derived from observed completion time.
 - Revenue attribution requires explicit business input.
 - A high Evaluation score proves output quality against configured policy; it does not independently prove financial value.
 - SLA compliance is meaningful only when deadlines or SLA targets are configured correctly.
