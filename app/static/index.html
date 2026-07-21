@@ -16,14 +16,12 @@
   <link rel="stylesheet" href="/static/phase9.css" />
   <link rel="stylesheet" href="/static/phase10.css" />
   <link rel="stylesheet" href="/static/phase11.css" />
+  <link rel="stylesheet" href="/static/phase12.css" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">B</div>
-        <div><strong>BeezaOffice</strong><span>AI Workforce OS</span></div>
-      </div>
+      <div class="brand"><div class="brand-mark">B</div><div><strong>BeezaOffice</strong><span>AI Workforce OS</span></div></div>
       <nav>
         <button class="nav-item active">Command Center</button>
         <button class="nav-item">Missions <span id="missionCount">0</span></button>
@@ -34,145 +32,23 @@
         <button class="nav-item" id="governanceNav">Governance <span id="governanceNavCount">0</span></button>
         <button class="nav-item" id="runtimeNav">Agent Runtimes <span id="runtimeCount">4</span></button>
       </nav>
-      <div class="capacity-card">
-        <span>Runtime capacity</span>
-        <strong>42 / 200 active slots</strong>
-        <div class="meter"><i style="width:21%"></i></div>
-        <small>1,000 registered-agent target</small>
-      </div>
+      <div class="capacity-card"><span>Runtime capacity</span><strong>42 / 200 active slots</strong><div class="meter"><i style="width:21%"></i></div><small>1,000 registered-agent target</small></div>
     </aside>
-
     <main>
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">PRODUCTION · SOVEREIGN RUNTIME</p>
-          <h1>Agent Command Center</h1>
-        </div>
-        <div class="top-actions">
-          <span class="live-dot">Live</span>
-          <button class="secondary" id="organizationMapButton">Organization Map</button>
-          <button class="primary" id="newMission">+ New Mission</button>
-        </div>
-      </header>
-
+      <header class="topbar"><div><p class="eyebrow">PRODUCTION · SOVEREIGN RUNTIME</p><h1>Agent Command Center</h1></div><div class="top-actions"><span class="live-dot">Live</span><button class="secondary" id="organizationMapButton">Organization Map</button><button class="primary" id="newMission">+ New Mission</button></div></header>
       <section class="stats" id="stats"></section>
-
       <section class="grid-main">
-        <div class="panel missions-panel">
-          <div class="panel-title">
-            <div><p class="eyebrow">LIVE OPERATIONS</p><h2>Mission Queue</h2></div>
-            <button class="text-button">View all</button>
-          </div>
-          <div id="missionList" class="mission-list"></div>
-        </div>
-
-        <div class="panel war-room-panel">
-          <div class="panel-title">
-            <div><p class="eyebrow">ACTIVE WAR ROOM</p><h2 id="roomTitle">Select a mission</h2></div>
-            <span id="roomStatus" class="status-pill">IDLE</span>
-          </div>
-          <p id="roomObjective" class="objective">Choose a mission to inspect its live collaboration timeline.</p>
-          <div class="room-meta">
-            <div><span>Commander</span><strong id="roomCommander">—</strong></div>
-            <div><span>Progress</span><strong id="roomProgress">—</strong></div>
-            <div><span>Dependency</span><strong id="roomWaiting">—</strong></div>
-          </div>
-          <div id="timeline" class="timeline"></div>
-        </div>
-
-        <div class="panel attention-panel">
-          <div class="panel-title">
-            <div><p class="eyebrow">ACTION REQUIRED</p><h2>Attention</h2></div>
-            <span class="alert-badge">3</span>
-          </div>
-          <div class="attention-item critical">
-            <span>Approval</span>
-            <strong>Production remediation</strong>
-            <p>INC-2026-0720 requires operator approval before service changes.</p>
-            <button>Review decision</button>
-          </div>
-          <div class="attention-item warning">
-            <span>Waiting</span>
-            <strong>Noah waiting for Aiden</strong>
-            <p>Metrics work package has exceeded the five-minute follow-up threshold.</p>
-          </div>
-          <div class="attention-item">
-            <span>Budget</span>
-            <strong>Cloud capacity review</strong>
-            <p>Finance recommendation is ready for human approval.</p>
-          </div>
-        </div>
+        <div class="panel missions-panel"><div class="panel-title"><div><p class="eyebrow">LIVE OPERATIONS</p><h2>Mission Queue</h2></div><button class="text-button">View all</button></div><div id="missionList" class="mission-list"></div></div>
+        <div class="panel war-room-panel"><div class="panel-title"><div><p class="eyebrow">ACTIVE WAR ROOM</p><h2 id="roomTitle">Select a mission</h2></div><span id="roomStatus" class="status-pill">IDLE</span></div><p id="roomObjective" class="objective">Choose a mission to inspect its live collaboration timeline.</p><div class="room-meta"><div><span>Commander</span><strong id="roomCommander">—</strong></div><div><span>Progress</span><strong id="roomProgress">—</strong></div><div><span>Dependency</span><strong id="roomWaiting">—</strong></div></div><div id="timeline" class="timeline"></div></div>
+        <div class="panel attention-panel"><div class="panel-title"><div><p class="eyebrow">ACTION REQUIRED</p><h2>Attention</h2></div><span class="alert-badge">3</span></div><div class="attention-item critical"><span>Approval</span><strong>Production remediation</strong><p>INC-2026-0720 requires operator approval before service changes.</p><button>Review decision</button></div><div class="attention-item warning"><span>Waiting</span><strong>Noah waiting for Aiden</strong><p>Metrics work package has exceeded the five-minute follow-up threshold.</p></div><div class="attention-item"><span>Budget</span><strong>Cloud capacity review</strong><p>Finance recommendation is ready for human approval.</p></div></div>
       </section>
-
-      <section class="panel dispatch-panel" id="missionRuntimeActivity">
-        <div class="panel-title">
-          <div><p class="eyebrow">PHASE 2 · RUNTIME CONTROL</p><h2>Mission Runtime Activity</h2></div>
-          <div class="dispatch-live-state"><span class="live-dot">Auto-sync 5s</span><b id="dispatchCount">0</b></div>
-        </div>
-        <p class="dispatch-intro">Remote run status, output, safe-stop controls and human approvals are synchronized into the selected mission war room.</p>
-        <div id="dispatchList" class="dispatch-list"></div>
-      </section>
-
-      <section class="panel organization-map-panel" id="organizationMap">
-        <div class="panel-title">
-          <div><p class="eyebrow">LIVE DIGITAL OFFICE</p><h2>Organization Map</h2></div>
-          <div class="legend"><span>● Working</span><span>◐ Waiting</span><span>○ Available</span></div>
-        </div>
-        <div class="organization-map-body">
-          <div class="organization-map-visual">
-            <img src="/static/assets/organization-map.webp" alt="BeezaOffice AI organization command center" loading="eager" />
-            <div class="map-live-badge"><span class="live-dot">Live collaboration</span></div>
-          </div>
-          <aside class="map-summary">
-            <div><span>Registered workforce</span><strong>12 / 1,000</strong><small>Founding agent roster</small></div>
-            <div><span>Active missions</span><strong id="mapMissionCount">0</strong><small>Cross-department execution</small></div>
-            <div><span>Runtime slots</span><strong>42 / 200</strong><small>Elastic worker pool</small></div>
-            <div><span>Current focus</span><strong>Incident response</strong><small>Rei → Aiden → Noah → Yuna → Mira</small></div>
-          </aside>
-        </div>
-      </section>
-
-      <section class="panel runtime-panel" id="runtimeMesh">
-        <div class="panel-title">
-          <div>
-            <p class="eyebrow">AGENT RUNTIME MESH</p>
-            <h2>External Agent Platforms</h2>
-          </div>
-          <div class="runtime-header-state">
-            <span id="runtimeOnline">0 online</span>
-            <span>OpenClaw · CherryAgent · Hermes · thClaws</span>
-          </div>
-        </div>
-        <p class="runtime-intro">
-          BeezaOffice remains the command and governance plane. Missions can be dispatched
-          to specialist agents running on any supported platform, while Beeza keeps the
-          mission identity, timeline, approvals, and audit trail.
-        </p>
-        <div id="runtimeGrid" class="runtime-grid"></div>
-        <div id="runtimeMessage" class="runtime-message">Select a mission, then dispatch it to a configured runtime.</div>
-      </section>
-
-      <section class="panel workforce-panel">
-        <div class="panel-title">
-          <div><p class="eyebrow">FOUNDING WORKFORCE</p><h2>Agent Presence</h2></div>
-          <div class="legend"><span>● Running</span><span>◐ Waiting</span><span>○ Available</span></div>
-        </div>
-        <div id="agentGrid" class="agent-grid"></div>
-      </section>
+      <section class="panel dispatch-panel" id="missionRuntimeActivity"><div class="panel-title"><div><p class="eyebrow">PHASE 2 · RUNTIME CONTROL</p><h2>Mission Runtime Activity</h2></div><div class="dispatch-live-state"><span class="live-dot">Auto-sync 5s</span><b id="dispatchCount">0</b></div></div><p class="dispatch-intro">Remote run status, output, safe-stop controls and human approvals are synchronized into the selected mission war room.</p><div id="dispatchList" class="dispatch-list"></div></section>
+      <section class="panel organization-map-panel" id="organizationMap"><div class="panel-title"><div><p class="eyebrow">LIVE DIGITAL OFFICE</p><h2>Organization Map</h2></div><div class="legend"><span>● Working</span><span>◐ Waiting</span><span>○ Available</span></div></div><div class="organization-map-body"><div class="organization-map-visual"><img src="/static/assets/organization-map.webp" alt="BeezaOffice AI organization command center" loading="eager" /><div class="map-live-badge"><span class="live-dot">Live collaboration</span></div></div><aside class="map-summary"><div><span>Registered workforce</span><strong>12 / 1,000</strong><small>Founding agent roster</small></div><div><span>Active missions</span><strong id="mapMissionCount">0</strong><small>Cross-department execution</small></div><div><span>Runtime slots</span><strong>42 / 200</strong><small>Elastic worker pool</small></div><div><span>Current focus</span><strong>Incident response</strong><small>Rei → Aiden → Noah → Yuna → Mira</small></div></aside></div></section>
+      <section class="panel runtime-panel" id="runtimeMesh"><div class="panel-title"><div><p class="eyebrow">AGENT RUNTIME MESH</p><h2>External Agent Platforms</h2></div><div class="runtime-header-state"><span id="runtimeOnline">0 online</span><span>OpenClaw · CherryAgent · Hermes · thClaws</span></div></div><p class="runtime-intro">BeezaOffice remains the command and governance plane. Missions can be dispatched to specialist agents running on any supported platform, while Beeza keeps the mission identity, timeline, approvals, and audit trail.</p><div id="runtimeGrid" class="runtime-grid"></div><div id="runtimeMessage" class="runtime-message">Select a mission, then dispatch it to a configured runtime.</div></section>
+      <section class="panel workforce-panel"><div class="panel-title"><div><p class="eyebrow">FOUNDING WORKFORCE</p><h2>Agent Presence</h2></div><div class="legend"><span>● Running</span><span>◐ Waiting</span><span>○ Available</span></div></div><div id="agentGrid" class="agent-grid"></div></section>
     </main>
   </div>
-
-  <dialog id="missionDialog">
-    <form method="dialog" id="missionForm">
-      <div class="dialog-head"><div><p class="eyebrow">BEEZA COMMANDER</p><h2>Create Mission</h2></div><button value="cancel" class="icon-button">×</button></div>
-      <label>Mission title<input id="missionTitle" required minlength="3" placeholder="Investigate billing latency" /></label>
-      <label>Objective<textarea id="missionObjective" required minlength="10" placeholder="Identify the cause, propose remediation, request approval, verify recovery and create an executive report."></textarea></label>
-      <label>Priority<select id="missionPriority"><option>NORMAL</option><option>HIGH</option><option>CRITICAL</option><option>LOW</option></select></label>
-      <div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button type="submit" value="default" class="primary">Create and plan</button></div>
-      <p id="formMessage" class="form-message"></p>
-    </form>
-  </dialog>
-
+  <dialog id="missionDialog"><form method="dialog" id="missionForm"><div class="dialog-head"><div><p class="eyebrow">BEEZA COMMANDER</p><h2>Create Mission</h2></div><button value="cancel" class="icon-button">×</button></div><label>Mission title<input id="missionTitle" required minlength="3" placeholder="Investigate billing latency" /></label><label>Objective<textarea id="missionObjective" required minlength="10" placeholder="Identify the cause, propose remediation, request approval, verify recovery and create an executive report."></textarea></label><label>Priority<select id="missionPriority"><option>NORMAL</option><option>HIGH</option><option>CRITICAL</option><option>LOW</option></select></label><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button type="submit" value="default" class="primary">Create and plan</button></div><p id="formMessage" class="form-message"></p></form></dialog>
   <script src="/static/app.js"></script>
   <script src="/static/phase3.js"></script>
   <script src="/static/phase4.js"></script>
@@ -184,5 +60,6 @@
   <script src="/static/phase9.js"></script>
   <script src="/static/phase10.js"></script>
   <script src="/static/phase11.js"></script>
+  <script src="/static/phase12.js"></script>
 </body>
 </html>
