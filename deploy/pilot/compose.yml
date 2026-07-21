@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: beezaoffice
       POSTGRES_USER: beeza
-      POSTGRES_PASSWORD: pilot-password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pilot-password}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U beeza -d beezaoffice"]
       interval: 3s
@@ -24,23 +24,43 @@ services:
     image: ${BEEZA_IMAGE:-beezaoffice:pilot}
     environment:
       APP_ENV: pilot
-      DATABASE_URL: postgresql+psycopg://beeza:pilot-password@postgres:5432/beezaoffice
+      BEEZA_APP_VERSION: ${BEEZA_APP_VERSION:-0.16.0}
+      BEEZA_RELEASE_CHANNEL: ${BEEZA_RELEASE_CHANNEL:-pilot}
+      DATABASE_URL: postgresql+psycopg://beeza:${POSTGRES_PASSWORD:-pilot-password}@postgres:5432/beezaoffice
       REDIS_URL: redis://redis:6379/0
-      BEEZA_AUTH_TOKEN: pilot-token
-      BEEZA_METRICS_TOKEN: pilot-metrics-token
+      BEEZA_AUTH_TOKEN: ${BEEZA_AUTH_TOKEN:-pilot-token}
+      BEEZA_METRICS_TOKEN: ${BEEZA_METRICS_TOKEN:-pilot-metrics-token}
       BEEZA_PUBLIC_URL: http://127.0.0.1:18080
-      BEEZA_DEFAULT_TENANT: tenant:beeza
-      BEEZA_LICENSE_MODE: development
-      BEEZA_DEPLOYMENT_ID: deployment:pilot-gate
+      BEEZA_DEFAULT_TENANT: ${BEEZA_DEFAULT_TENANT:-tenant:beeza}
+      BEEZA_LICENSE_MODE: ${BEEZA_LICENSE_MODE:-development}
+      BEEZA_DEPLOYMENT_ID: ${BEEZA_DEPLOYMENT_ID:-deployment:pilot-gate}
+      BEEZA_LICENSE_ISSUER: ${BEEZA_LICENSE_ISSUER:-beezaoffice-license}
+      BEEZA_LICENSE_AUDIENCE: ${BEEZA_LICENSE_AUDIENCE:-beezaoffice}
+      BEEZA_LICENSE_ALGORITHMS: ${BEEZA_LICENSE_ALGORITHMS:-EdDSA}
+      BEEZA_LICENSE_PUBLIC_KEY: ${BEEZA_LICENSE_PUBLIC_KEY:-}
+      BEEZA_LICENSE_TOKEN: ${BEEZA_LICENSE_TOKEN:-}
       BEEZA_SCHEMA_STRICT: "true"
-      BEEZA_BUSINESS_ENABLED: "false"
-      BEEZA_RUNTIME_SYNC_ENABLED: "false"
-      BEEZA_COLLAB_ENABLED: "false"
-      BEEZA_MEETING_ENABLED: "false"
-      BEEZA_SCHEDULER_ENABLED: "false"
-      BEEZA_EVALUATOR_ENABLED: "false"
-      BEEZA_SOP_ENABLED: "false"
-      BEEZA_PROTOCOL_ENABLED: "false"
+      BEEZA_MAX_REQUEST_BYTES: ${BEEZA_MAX_REQUEST_BYTES:-2097152}
+      BEEZA_FORCE_HTTPS: "false"
+      BEEZA_BUSINESS_ENABLED: ${BEEZA_BUSINESS_ENABLED:-false}
+      BEEZA_RUNTIME_SYNC_ENABLED: ${BEEZA_RUNTIME_SYNC_ENABLED:-false}
+      BEEZA_COLLAB_ENABLED: ${BEEZA_COLLAB_ENABLED:-false}
+      BEEZA_MEETING_ENABLED: ${BEEZA_MEETING_ENABLED:-false}
+      BEEZA_SCHEDULER_ENABLED: ${BEEZA_SCHEDULER_ENABLED:-false}
+      BEEZA_EVALUATOR_ENABLED: ${BEEZA_EVALUATOR_ENABLED:-false}
+      BEEZA_SOP_ENABLED: ${BEEZA_SOP_ENABLED:-false}
+      BEEZA_PROTOCOL_ENABLED: ${BEEZA_PROTOCOL_ENABLED:-false}
+      OPENCLAW_BASE_URL: ${OPENCLAW_BASE_URL:-}
+      OPENCLAW_AUTH_TOKEN: ${OPENCLAW_AUTH_TOKEN:-}
+      OPENCLAW_AGENT_TARGET: ${OPENCLAW_AGENT_TARGET:-openclaw/default}
+      CHERRYAGENT_BASE_URL: ${CHERRYAGENT_BASE_URL:-}
+      CHERRYAGENT_AUTH_TOKEN: ${CHERRYAGENT_AUTH_TOKEN:-}
+      HERMES_BASE_URL: ${HERMES_BASE_URL:-}
+      HERMES_AUTH_TOKEN: ${HERMES_AUTH_TOKEN:-}
+      HERMES_MODEL: ${HERMES_MODEL:-hermes-agent}
+      THCLAW_BASE_URL: ${THCLAW_BASE_URL:-}
+      THCLAW_AUTH_TOKEN: ${THCLAW_AUTH_TOKEN:-}
+      THCLAW_MODEL: ${THCLAW_MODEL:-}
     depends_on:
       postgres:
         condition: service_healthy
