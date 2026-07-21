@@ -11,6 +11,7 @@ from enterprise_service import (
     authenticate_session,
 )
 from governance_models import GovernanceIdentity
+from governance_service import has_permission
 from main import AUTH_TOKEN, SessionLocal, app
 
 
@@ -38,10 +39,12 @@ def resolve_commercial_tenant(request: Request) -> str:
         if bearer and bearer != AUTH_TOKEN:
             session = authenticate_session(db, bearer)
             if session is not None:
+                identity_key = session.identity_key
                 authenticated_tenant = session.tenant_key
             else:
                 api_key = authenticate_api_key(db, bearer)
                 if api_key is not None:
+                    identity_key = api_key.identity_key
                     authenticated_tenant = api_key.tenant_key
         identity_tenant = db.scalar(
             select(GovernanceIdentity.tenant_key).where(
@@ -49,8 +52,15 @@ def resolve_commercial_tenant(request: Request) -> str:
                 GovernanceIdentity.status == "ACTIVE",
             )
         )
+        base_tenant = authenticated_tenant or identity_tenant or DEFAULT_TENANT
+        tenant_key = base_tenant
+        if requested and requested != base_tenant:
+            if has_permission(db, identity_key, "enterprise:tenant:manage"):
+                tenant_key = requested
+        elif requested:
+            tenant_key = requested
         db.commit()
-    return requested or authenticated_tenant or identity_tenant or DEFAULT_TENANT
+    return tenant_key
 
 
 @app.middleware("http")
