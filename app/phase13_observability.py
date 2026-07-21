@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from fastapi import Depends
+import os
+
+from fastapi import Depends, Header, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from business_models import IndustryPack, OutcomeRecord, PackInstallation, TenantSubscription
 from enterprise_models import EnterpriseTenant
-from main import Mission, RuntimeConnector, RuntimeDispatch, app, db_session, engine, redis_client
+from main import AUTH_TOKEN, Mission, RuntimeConnector, RuntimeDispatch, app, db_session, engine, redis_client
 from protocol_models import ProtocolTask
 from registry_models import RegisteredAgent
+
+METRICS_TOKEN = os.getenv("BEEZA_METRICS_TOKEN", "").strip() or AUTH_TOKEN
 
 
 def remove_route(path: str, method: str) -> None:
@@ -23,11 +27,22 @@ def remove_route(path: str, method: str) -> None:
     ]
 
 
+def require_metrics_token(
+    authorization: str | None = Header(default=None),
+) -> None:
+    if METRICS_TOKEN and authorization != f"Bearer {METRICS_TOKEN}":
+        raise HTTPException(status_code=401, detail="Invalid metrics token")
+
+
 remove_route("/api/health", "GET")
 remove_route("/metrics", "GET")
 
 
-@app.get("/metrics", response_class=PlainTextResponse)
+@app.get(
+    "/metrics",
+    response_class=PlainTextResponse,
+    dependencies=[Depends(require_metrics_token)],
+)
 def prometheus_business_metrics(db: Session = Depends(db_session)) -> str:
     tenants = db.scalar(select(func.count(EnterpriseTenant.id))) or 0
     missions = db.scalar(select(func.count(Mission.id))) or 0
@@ -169,6 +184,7 @@ def phase13_health(db: Session = Depends(db_session)) -> dict[str, object]:
         "tenant_isolation": "row-enforced",
         "enterprise_auth": ["platform-token", "oidc-session", "scoped-api-key"],
         "observability": ["health", "readiness", "prometheus", "business-kpi"],
+        "metrics_auth": "configured" if METRICS_TOKEN else "open-private-network",
         "governance": "enforced",
         "business_layer": "enabled",
     }
