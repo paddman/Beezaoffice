@@ -2,29 +2,109 @@
 
 **AI Workforce Operating System** for operating 10–1,000 governed AI agents across private, sovereign and enterprise environments.
 
-BeezaOffice is the command and governance plane above OpenClaw, CherryAgent, Hermes Agent and thClaws. It turns agent work into durable missions with collaboration, meetings, intelligent routing, evidence verification, reusable SOPs, standard protocols and enterprise controls.
+BeezaOffice is the command, governance and business-evidence plane above OpenClaw, CherryAgent, Hermes Agent and thClaws. It turns agent work into durable missions with collaboration, meetings, intelligent routing, evidence verification, reusable SOPs, standard protocols, enterprise controls and measurable business outcomes.
 
 ## Current platform
 
 | Phase | Capability |
 |---:|---|
 | 2 | Runtime dispatch, synchronization, remote output, safe stop and approvals |
-| 3 | Durable runtime-event stream and mission SSE |
+| 3 | Durable runtime-event stream and Mission SSE |
 | 4 | Typed Collaboration Bus, dependencies, mailbox, retry and escalation |
 | 5 | Structured agent meetings, bounded rounds and human decisions |
-| 6 | Identity, RBAC, clearance, policy, budget, approvals, kill switch and hash-chained audit |
+| 6 | Identity, RBAC, clearance, policy, budgets, approvals, kill switch and hash-chained audit |
 | 7 | Agent Registry, organization graph, skills, capacity, reliability and delegation |
 | 8 | Intelligent Agent/Runtime/Model routing, cost control, backpressure and failover |
 | 9 | Evidence evaluation, acceptance checks, provenance, replay and quality scoring |
 | 10 | Versioned SOP Builder, approval nodes, verification gates and rollback |
 | 11 | A2A, MCP tools subset, OpenAI-compatible API, signed webhooks and protocol events |
-| **12** | **Multi-tenant enterprise platform, OIDC sessions, scoped API keys, rate limits, backup/DR, SIEM, Kubernetes HA and observability** |
+| 12 | Multi-tenant Enterprise Platform, OIDC sessions, scoped API keys, rate limits, backup/DR, SIEM and Kubernetes HA |
+| **13** | **Verified-work economics, Executive KPIs, Department scorecards, Agent economics, SLA, billing meters and Industry Packs** |
+
+## Phase 13 — Executive & Business Layer
+
+### Verified business outcomes
+
+Evaluation Runs are synchronized into tenant-owned business outcome records:
+
+```text
+PASS  → VERIFIED
+WARN  → REVIEW
+FAIL  → FAILED
+ERROR → FAILED
+```
+
+Each outcome can contain:
+
+- Quality score and evidence count
+- Baseline versus actual duration
+- Hours saved
+- Baseline versus actual cost
+- Cost saved
+- Attributed revenue value
+- SLA target and compliance
+- Department and Agent attribution
+- Evaluation result hash
+- Measurement assumptions
+
+Automatic records are marked `ESTIMATED`. Confirmed finance or operational values can be entered as `MANUAL`; the worker will not overwrite them.
+
+### Executive dashboard
+
+The dashboard provides:
+
+- Verified outcome count and verification rate
+- Average quality
+- Evidence count
+- Hours and cost saved
+- Revenue value and total value created
+- Value-to-cost ratio
+- SLA compliance
+- Department scorecards
+- Agent economics
+- Daily value trend
+- Top verified outcomes
+
+### Integrity-hashed snapshots
+
+Executive snapshots preserve a fixed period scorecard with a SHA-256 integrity hash for board packs, reports and audit references.
+
+### Usage and billing
+
+Initial tenant meters:
+
+```text
+api_requests
+runtime_dispatches
+external_tasks
+sop_runs
+backup_runs
+verified_outcomes
+pack_installs
+```
+
+Seeded plans:
+
+- Team
+- Enterprise
+- Sovereign
+
+Billing output is an operational estimate; it does not calculate tax, discounts, support retainers or infrastructure pass-through.
+
+### Industry Packs
+
+Published manifests:
+
+- Government Document Operations
+- IDC & SOC Incident Command
+- AI CFO Office
+- Customer Support Operations
+
+Installation records a governed tenant manifest. It does not silently create credentials or activate external connectors.
 
 ## Phase 12 — Enterprise Platform
 
-### Multi-tenant control plane
-
-Each tenant has:
+Each Enterprise Tenant has:
 
 - Tenant key, slug and lifecycle status
 - Data region and deployment namespace
@@ -34,11 +114,7 @@ Each tenant has:
 - Object-storage bucket and encryption-key reference
 - Retention policy and air-gap mode
 
-Existing resources are assigned to `tenant:beeza` on first startup. New Mission, Protocol and SOP resources inherit the active request tenant.
-
-### Enterprise authentication
-
-BeezaOffice accepts three credential types:
+BeezaOffice accepts:
 
 ```text
 BEEZA_AUTH_TOKEN     bootstrap / private operator token
@@ -46,32 +122,18 @@ bzsess_...           short-lived OIDC-backed enterprise session
 bzk_...              tenant-scoped machine API key
 ```
 
-OIDC exchange verifies issuer, audience, expiry, issue time and the configured JWKS signing key. Auto-provisioned users receive a governed identity and tenant-scoped role binding.
+API keys are displayed once. The database stores only the hash, prefix, tenant, identity, scopes, expiry and rate limit.
 
-API keys are displayed once. Only the SHA-256 hash, prefix, tenant, identity, scopes, rate limit and expiry are stored.
+Tenant isolation is enforced for Missions, Registry, Collaboration, Dispatch, Protocol events and SOP ledgers.
 
-### Tenant isolation and rate limiting
+## Backup, DR and Kubernetes
 
-```text
-Credential
-→ resolve identity and tenant
-→ enforce API-key scope
-→ Redis tenant/identity rate limit
-→ verify resource ownership
-→ Phase 6 Governance
-→ execute request
-```
-
-Mission list/create/detail and Protocol task lists are tenant-aware. Mission-linked operations return `404` when the active tenant does not own the resource.
-
-### Backup and DR
-
-Backup plans and runs are tracked in the control plane. Privileged backup commands execute through an approved external runner rather than inside the web process.
+Backup control-plane records are executed by an approved external runner:
 
 ```text
 Backup request
-→ signed manifest
-→ pg_dump + Redis RDB + evidence/config copy
+→ pg_dump + Redis RDB + evidence/configuration copy
+→ checksum
 → immutable S3/MinIO destination
 → governed completion callback
 → restore exercise
@@ -84,41 +146,13 @@ deploy/backup/run-backup.sh
 deploy/backup/restore-backup.sh
 ```
 
-A requested backup is not considered verified until the executor reports `COMPLETED` and the archive checksum is retained.
-
-### SIEM and audit export
-
-Tenant-scoped audit records can be exported using an at-least-once cursor while preserving the audit hash chain.
+Kubernetes baseline:
 
 ```text
-GET  /api/enterprise/siem/export?after_id=0&limit=500
-POST /api/enterprise/siem/sinks/{sink_key}/checkpoint?last_audit_id=...
+deploy/k8s/beezaoffice.yaml
 ```
 
-### HA and Kubernetes
-
-`deploy/k8s/beezaoffice.yaml` provides a production baseline with:
-
-- Three control-plane replicas
-- Rolling updates
-- Liveness and readiness probes
-- Pod disruption budget
-- Horizontal autoscaling
-- Non-root/read-only security context
-- Default-deny NetworkPolicy
-- Topology spreading
-- External PostgreSQL HA, Redis HA and object-storage references
-
-### Observability and supply chain
-
-```text
-GET /health/live
-GET /health/ready
-GET /metrics
-GET /api/health
-```
-
-CI compiles all Phase 1–12 modules, checks browser JavaScript, builds the image, runs enterprise smoke tests and publishes an SPDX 2.3 dependency inventory artifact.
+It provides three replicas, rolling updates, probes, PodDisruptionBudget, HPA, non-root/read-only security context, topology spreading and NetworkPolicy. PostgreSQL HA, Redis HA and object storage remain external platform dependencies.
 
 ## Quick deploy
 
@@ -141,7 +175,16 @@ BEEZA_PUBLIC_URL=https://beeza.example.com
 BEEZA_DEFAULT_TENANT=tenant:beeza
 ```
 
-For OIDC, backup and object storage also configure:
+Business configuration:
+
+```env
+BEEZA_BUSINESS_ENABLED=true
+BEEZA_BUSINESS_INTERVAL_SECONDS=60
+BEEZA_DEFAULT_LABOR_RATE_USD=30
+BEEZA_BILLING_CURRENCY=USD
+```
+
+Enterprise storage configuration:
 
 ```env
 BEEZA_OBJECT_STORE_ENDPOINT=https://minio.example.com
@@ -149,6 +192,30 @@ BEEZA_OBJECT_STORE_BUCKET=beeza-evidence
 BEEZA_BACKUP_BUCKET=beeza-backups
 BEEZA_BACKUP_ENCRYPTION_KEY_REF=vault://beeza/backup-key
 BEEZA_MCP_ALLOWED_ORIGINS=https://console.example.com
+```
+
+## Executive and Business API
+
+```text
+GET  /api/business/status
+POST /api/business/sync
+
+GET  /api/business/executive?days=30
+GET  /api/business/departments?days=30
+GET  /api/business/agents?days=30
+GET  /api/business/outcomes
+POST /api/business/outcomes
+
+GET  /api/business/snapshots
+POST /api/business/snapshots
+
+GET  /api/business/plans
+GET  /api/business/billing
+GET  /api/business/usage
+POST /api/business/subscription
+
+GET  /api/business/industry-packs
+POST /api/business/industry-packs/{pack_key}/install
 ```
 
 ## Enterprise API
@@ -194,6 +261,27 @@ POST /v1/chat/completions
 POST /hooks/{channel}
 ```
 
+## Health and metrics
+
+```text
+GET /health/live
+GET /health/ready
+GET /metrics
+GET /api/health
+```
+
+Phase 13 Prometheus metrics include:
+
+```text
+beeza_business_outcomes_total
+beeza_business_verified_outcomes
+beeza_business_hours_saved
+beeza_business_value_created_usd
+beeza_business_sla_compliance_ratio
+beeza_business_installed_packs
+beeza_business_active_subscriptions
+```
+
 ## Runtime configuration
 
 ```env
@@ -231,24 +319,25 @@ Runtime Events + Evidence
         ↓
 Evaluation + Approval + Replay
         ↓
-Verified Outcome / SIEM / Executive Reporting
+Verified Business Outcome
+        ↓
+Executive KPI / Department / Agent Economics / Billing / SIEM
 ```
 
-## Enterprise boundary
+## Measurement boundary
 
-Phase 12 provides the software control-plane baseline. Production readiness still requires site-owned infrastructure and operations:
+- Automatically calculated time and cost values are estimates unless manually confirmed.
+- Revenue attribution requires explicit business input.
+- Evaluation quality does not independently prove financial value.
+- Billing output is an estimate, not a legally binding invoice.
+- Industry Packs are governed manifests until their connectors and SOPs are implemented and verified.
+- Production still requires real HA databases, TLS, KMS/Vault, object lock, restore drills, image signing and capacity testing.
 
-- Real PostgreSQL and Redis HA
-- TLS ingress and certificate rotation
-- KMS/HSM or Vault-backed key references
-- S3/MinIO object lock
-- OIDC/SAML/LDAP provider configuration
-- Backup restore drills and DR exercises
-- Container signing identity and admission policy
-- Capacity testing and incident runbooks
+Detailed architecture:
 
-Detailed architecture: `docs/PHASE-12-ENTERPRISE-PLATFORM.md`.
+- `docs/PHASE-12-ENTERPRISE-PLATFORM.md`
+- `docs/PHASE-13-EXECUTIVE-BUSINESS.md`
 
 ## Next phase
 
-**Phase 13 — Executive & Business Layer:** outcome KPIs, verified-work economics, cost savings, departmental scorecards, billing, industry packs and marketplace packaging.
+**Phase 14 — Commercial Productization:** tenant onboarding, contract entitlements, license enforcement, white-label branding, pack publishing workflow, signed releases and deployment installer.
