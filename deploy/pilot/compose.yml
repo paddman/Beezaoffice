@@ -36,6 +36,7 @@ services:
       APP_ENV: pilot
       BEEZA_APP_VERSION: ${BEEZA_APP_VERSION:-0.16.0}
       BEEZA_RELEASE_CHANNEL: ${BEEZA_RELEASE_CHANNEL:-pilot}
+      BEEZA_PILOT_RATE_LIMIT_PER_MINUTE: ${BEEZA_PILOT_RATE_LIMIT_PER_MINUTE:-120000}
       DATABASE_URL: postgresql+psycopg://beeza:${POSTGRES_PASSWORD:-pilot-password}@postgres:5432/beezaoffice
       REDIS_URL: redis://redis:6379/0
       BEEZA_AUTH_TOKEN: ${BEEZA_AUTH_TOKEN:-pilot-token}
