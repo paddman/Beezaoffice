@@ -62,6 +62,7 @@ jobs:
       - name: Smoke-test 0.16.0 Pilot Operations runtime
         run: |
           docker run --rm \
+            -e PYTHONPATH=/srv/beezaoffice \
             -v "$PWD/tests:/tests:ro" \
             beezaoffice:test python /tests/pilot_smoke.py
 
