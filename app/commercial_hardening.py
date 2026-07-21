@@ -6,13 +6,35 @@ from sqlalchemy.orm import Session
 import commercial_service
 import phase14_app
 from business_models import BillingPlan, TenantSubscription
-from commercial_models import FeatureEntitlement
+from commercial_models import CommercialLicense, FeatureEntitlement
 from commercial_service import PLAN_FEATURES, PLAN_LIMITS
 from enterprise_models import EnterpriseTenant
 from main import utcnow
 
+if commercial_service.LICENSE_MODE not in {"development", "warn", "enforce"}:
+    raise RuntimeError("BEEZA_LICENSE_MODE must be development, warn or enforce")
+
 _original_seed_commercial = commercial_service.seed_commercial
 _original_license_state = commercial_service.license_state
+_original_activate_license = commercial_service.activate_license
+
+
+def hardened_activate_license(
+    db: Session,
+    tenant_key: str,
+    encoded: str,
+    actor: str,
+) -> CommercialLicense:
+    digest = commercial_service.token_hash(encoded)
+    existing = db.scalar(
+        select(CommercialLicense).where(CommercialLicense.token_hash == digest)
+    )
+    if existing is not None and (
+        existing.tenant_key != tenant_key
+        or existing.deployment_id != commercial_service.DEPLOYMENT_ID
+    ):
+        raise ValueError("License token is already bound to another tenant or deployment")
+    return _original_activate_license(db, tenant_key, encoded, actor)
 
 
 def sync_contract_entitlements(db: Session, tenant_key: str) -> None:
@@ -45,7 +67,18 @@ def sync_contract_entitlements(db: Session, tenant_key: str) -> None:
 
 
 def commercial_seed_with_contracts(db: Session) -> None:
-    _original_seed_commercial(db)
+    configured_token = commercial_service.LICENSE_TOKEN
+    suppress_warn_token = (
+        commercial_service.LICENSE_MODE == "warn" and bool(configured_token)
+    )
+    if suppress_warn_token:
+        commercial_service.LICENSE_TOKEN = ""
+    try:
+        _original_seed_commercial(db)
+    finally:
+        if suppress_warn_token:
+            commercial_service.LICENSE_TOKEN = configured_token
+
     tenant_keys = list(
         db.scalars(
             select(EnterpriseTenant.tenant_key).where(
@@ -56,6 +89,19 @@ def commercial_seed_with_contracts(db: Session) -> None:
     for tenant_key in tenant_keys:
         sync_contract_entitlements(db, tenant_key)
     db.commit()
+
+    if configured_token and commercial_service.LICENSE_MODE != "development":
+        try:
+            hardened_activate_license(
+                db,
+                commercial_service.DEFAULT_TENANT,
+                configured_token,
+                "system:phase14",
+            )
+        except Exception:
+            db.rollback()
+            if commercial_service.LICENSE_MODE == "enforce":
+                raise
 
 
 def source_entitlements(
@@ -83,6 +129,8 @@ def effective_feature_contract(
     db: Session,
     tenant_key: str,
 ) -> tuple[set[str], dict[str, int], set[str], set[str]]:
+    sync_contract_entitlements(db, tenant_key)
+    db.flush()
     license_row = commercial_service.current_license(db, tenant_key)
     if license_row is None:
         return set(), {}, set(), set()
@@ -95,10 +143,11 @@ def effective_feature_contract(
     contract_features = {
         key for key in contract_rows if not key.startswith("limit.")
     }
-    if not contract_features:
-        effective_features = license_features
-    else:
-        effective_features = license_features & contract_features
+    effective_features = (
+        license_features & contract_features
+        if contract_features
+        else license_features
+    )
     effective_limits: dict[str, int] = {}
     all_limit_keys = set(license_limits) | {
         key.removeprefix("limit.")
@@ -147,10 +196,12 @@ def contract_license_state(db: Session, tenant_key: str):
     return state
 
 
+commercial_service.activate_license = hardened_activate_license
 commercial_service.seed_commercial = commercial_seed_with_contracts
 commercial_service.entitlement_allowed = contract_entitlement_allowed
 commercial_service.entitlement_limit = contract_entitlement_limit
 commercial_service.license_state = contract_license_state
+phase14_app.activate_license = hardened_activate_license
 phase14_app.seed_commercial = commercial_seed_with_contracts
 phase14_app.entitlement_allowed = contract_entitlement_allowed
 phase14_app.entitlement_limit = contract_entitlement_limit
