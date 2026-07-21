@@ -1,0 +1,192 @@
+name: Pilot Recovery and Isolation
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS URL of the deployed Pilot environment
+        required: true
+        type: string
+      tenant_key:
+        description: Primary licensed Pilot Tenant
+        required: true
+        type: string
+      pilot_key:
+        description: Pilot Program key
+        required: true
+        type: string
+      host:
+        description: Pilot database host
+        required: true
+        type: string
+      ssh_user:
+        description: SSH user with Docker access or passwordless sudo
+        required: true
+        default: ubuntu
+        type: string
+      ssh_port:
+        description: SSH port
+        required: true
+        default: "22"
+        type: string
+      secondary_tenant_slug:
+        description: Secondary licensed Tenant slug used for isolation checks
+        required: true
+        default: pilot-isolation
+        type: string
+      confirmation:
+        description: Type RESTORE-VERIFY-0.16.0 to authorize temporary restore tests
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-and-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: pilot-production
+    env:
+      BASE_URL: ${{ inputs.base_url }}
+      TENANT_KEY: ${{ inputs.tenant_key }}
+      PILOT_KEY: ${{ inputs.pilot_key }}
+      PILOT_HOST: ${{ inputs.host }}
+      PILOT_USER: ${{ inputs.ssh_user }}
+      PILOT_PORT: ${{ inputs.ssh_port }}
+      SECONDARY_SLUG: ${{ inputs.secondary_tenant_slug }}
+      BEEZA_AUTH_TOKEN: ${{ secrets.PILOT_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate protected inputs and secrets
+        run: |
+          test "${{ inputs.confirmation }}" = "RESTORE-VERIFY-0.16.0"
+          case "$BASE_URL" in https://*) ;; *) echo "Pilot URL must use HTTPS" >&2; exit 1 ;; esac
+          test -n "$BEEZA_AUTH_TOKEN"
+          test -n "${{ secrets.PILOT_SECONDARY_LICENSE_TOKEN }}"
+          test -n "${{ secrets.PILOT_SSH_PRIVATE_KEY }}"
+          test -n "${{ secrets.PILOT_SSH_KNOWN_HOSTS }}"
+
+      - name: Prepare pinned SSH trust and secondary License
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.PILOT_SSH_PRIVATE_KEY }}" > ~/.ssh/pilot_key
+          printf '%s\n' "${{ secrets.PILOT_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/pilot_key ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.PILOT_SECONDARY_LICENSE_TOKEN }}" > secondary-license.jwt
+          chmod 600 secondary-license.jwt
+
+      - name: Verify License and schema state
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          headers = {
+              "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
+              "X-Beeza-Identity": "human:owner",
+              "X-Beeza-Tenant": os.environ["TENANT_KEY"],
+          }
+          def read(path):
+              request = urllib.request.Request(os.environ["BASE_URL"].rstrip("/") + path, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          commercial = read("/api/commercial/status")
+          schema = read("/api/system/schema")
+          assert commercial["version"] == "0.16.0", commercial
+          assert commercial["license"]["mode"] == "enforce", commercial
+          assert commercial["license"]["valid"] is True, commercial
+          assert schema["up_to_date"] is True, schema
+          assert schema["current_revision"] == "20260722_0002", schema
+          with open("pilot-license-schema.json", "w", encoding="utf-8") as handle:
+              json.dump({"commercial": commercial, "schema": schema}, handle, indent=2, sort_keys=True)
+          PY
+          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate license_lifecycle --status PASS --source REAL_PILOT --summary "Signed License is active in enforce mode" --report pilot-license-schema.json --artifact-ref github-actions://${{ github.run_id }}/license-schema
+          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate schema_migration --status PASS --source REAL_PILOT --summary "Database is at Alembic revision 20260722_0002 in strict mode" --report pilot-license-schema.json --artifact-ref github-actions://${{ github.run_id }}/license-schema
+
+      - name: Run two-Licensed-Tenant isolation gate
+        run: |
+          python tests/pilot_tenant_isolation.py \
+            --base-url "$BASE_URL" \
+            --token "$BEEZA_AUTH_TOKEN" \
+            --primary-tenant "$TENANT_KEY" \
+            --secondary-slug "$SECONDARY_SLUG" \
+            --secondary-license-token-file secondary-license.jwt \
+            --pilot-key "$PILOT_KEY" \
+            --artifact-ref github-actions://${{ github.run_id }}/tenant-isolation \
+            --output pilot-tenant-isolation-report.json
+
+      - name: Restore production backup into isolated verification database
+        run: |
+          ssh -i ~/.ssh/pilot_key -p "$PILOT_PORT" "$PILOT_USER@$PILOT_HOST" \
+            "RUN_ID='${GITHUB_RUN_ID}' sh -s" <<'REMOTE'
+          set -eu
+          SUDO=""
+          if ! docker info >/dev/null 2>&1 || [ ! -r /opt/beezaoffice/.env ]; then
+            sudo -n true >/dev/null
+            SUDO="sudo"
+          fi
+          install_dir=/opt/beezaoffice
+          env_file="$install_dir/.env"
+          compose_file="$install_dir/compose.yml"
+          restore_db="beeza_restore_verify_${RUN_ID}"
+          work_dir="$install_dir/recovery-verification/$RUN_ID"
+          $SUDO install -d -m 700 "$work_dir"
+
+          compose() {
+            $SUDO docker compose --env-file "$env_file" -f "$compose_file" "$@"
+          }
+
+          postgres_user="$(grep '^POSTGRES_USER=' "$env_file" | head -n1 | cut -d= -f2-)"
+          postgres_db="$(grep '^POSTGRES_DB=' "$env_file" | head -n1 | cut -d= -f2-)"
+          database_url="$(grep '^DATABASE_URL=' "$env_file" | head -n1 | cut -d= -f2-)"
+          restore_url="$(printf '%s' "$database_url" | sed "s#/${postgres_db}$#/${restore_db}#")"
+
+          compose exec -T postgres pg_dump -U "$postgres_user" --format=custom --compress=9 "$postgres_db" > /tmp/beeza-pilot-restore.dump
+          test -s /tmp/beeza-pilot-restore.dump
+          compose exec -T postgres dropdb -U "$postgres_user" --if-exists "$restore_db"
+          compose exec -T postgres createdb -U "$postgres_user" "$restore_db"
+          cat /tmp/beeza-pilot-restore.dump | compose exec -T postgres pg_restore -U "$postgres_user" --dbname="$restore_db" --no-owner --exit-on-error
+
+          live_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$postgres_db" -Atqc "SELECT (SELECT count(*) FROM missions)||':'||(SELECT count(*) FROM enterprise_resource_scopes)||':'||(SELECT count(*) FROM pilot_programs)||':'||(SELECT count(*) FROM pilot_gate_evidence)")"
+          restored_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$restore_db" -Atqc "SELECT (SELECT count(*) FROM missions)||':'||(SELECT count(*) FROM enterprise_resource_scopes)||':'||(SELECT count(*) FROM pilot_programs)||':'||(SELECT count(*) FROM pilot_gate_evidence)")"
+          test "$live_counts" = "$restored_counts"
+
+          compose run --rm -e DATABASE_URL="$restore_url" beezaoffice alembic -c alembic.ini downgrade 20260721_0001
+          compose run --rm -e DATABASE_URL="$restore_url" beezaoffice alembic -c alembic.ini upgrade head
+          restored_revision="$(compose run --rm -e DATABASE_URL="$restore_url" beezaoffice python -c "from main import engine; from schema_service import schema_status; print(schema_status(engine)['current_revision'])" | tail -n1)"
+          test "$restored_revision" = "20260722_0002"
+
+          printf '{"gate_status":"PASS","live_counts":"%s","restored_counts":"%s","restored_revision":"%s","verification_database":"%s"}\n' \
+            "$live_counts" "$restored_counts" "$restored_revision" "$restore_db" \
+            | $SUDO tee "$work_dir/recovery-report.json" >/dev/null
+          $SUDO chmod 600 "$work_dir/recovery-report.json"
+          compose exec -T postgres dropdb -U "$postgres_user" --if-exists "$restore_db"
+          rm -f /tmp/beeza-pilot-restore.dump
+          REMOTE
+          scp -i ~/.ssh/pilot_key -P "$PILOT_PORT" \
+            "$PILOT_USER@$PILOT_HOST:/opt/beezaoffice/recovery-verification/${GITHUB_RUN_ID}/recovery-report.json" \
+            recovery-report.json
+
+      - name: Record recovery and rollback evidence
+        run: |
+          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate backup_restore --status PASS --source REAL_PILOT_RECOVERY --summary "PostgreSQL backup restored into an isolated verification database with matching durable counts" --report recovery-report.json --artifact-ref github-actions://${{ github.run_id }}/backup-restore
+          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate upgrade_rollback --status PASS --source REAL_PILOT_RECOVERY --summary "Restored database completed Alembic downgrade and upgrade to revision 20260722_0002" --report recovery-report.json --artifact-ref github-actions://${{ github.run_id }}/upgrade-rollback
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beezaoffice-0.16.0-recovery-isolation
+          path: |
+            pilot-license-schema.json
+            pilot-tenant-isolation-report.json
+            recovery-report.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Remove local secrets
+        if: always()
+        run: rm -f secondary-license.jwt ~/.ssh/pilot_key ~/.ssh/known_hosts
