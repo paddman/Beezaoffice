@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 
-app = FastAPI(title="BeezaOffice Pilot Runtime Simulator", version="0.16.0")
+app = FastAPI(title="BeezaOffice Pilot Runtime Simulator", version="0.16.1")
 
 
 def result(runtime: str, run_id: str) -> dict[str, Any]:
