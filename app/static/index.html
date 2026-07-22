@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="/static/phase13.css" />
   <link rel="stylesheet" href="/static/phase14.css" />
   <link rel="stylesheet" href="/static/pilot.css" />
+  <link rel="stylesheet" href="/static/agent_rooms.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -38,7 +39,7 @@
       <div class="capacity-card"><span>Runtime capacity</span><strong>42 / 200 active slots</strong><div class="meter"><i style="width:21%"></i></div><small>1,000 registered-agent target</small></div>
     </aside>
     <main>
-      <header class="topbar"><div><p class="eyebrow">PILOT RELEASE 0.16.0 · SOVEREIGN RUNTIME</p><h1>Agent Command Center</h1></div><div class="top-actions"><span class="live-dot">Live</span><button class="secondary" id="organizationMapButton">Organization Map</button><button class="primary" id="newMission">+ New Mission</button></div></header>
+      <header class="topbar"><div><p class="eyebrow">PILOT RELEASE 0.16.1 · AGENT ROOMS</p><h1>Agent Command Center</h1></div><div class="top-actions"><span class="live-dot">Live</span><button class="secondary" id="organizationMapButton">Organization Map</button><button class="primary" id="newMission">+ New Mission</button></div></header>
       <section class="stats" id="stats"></section>
       <section class="grid-main">
         <div class="panel missions-panel"><div class="panel-title"><div><p class="eyebrow">LIVE OPERATIONS</p><h2>Mission Queue</h2></div><button class="text-button">View all</button></div><div id="missionList" class="mission-list"></div></div>
@@ -46,7 +47,7 @@
         <div class="panel attention-panel"><div class="panel-title"><div><p class="eyebrow">ACTION REQUIRED</p><h2>Attention</h2></div><span class="alert-badge">3</span></div><div class="attention-item critical"><span>Approval</span><strong>Production remediation</strong><p>INC-2026-0720 requires operator approval before service changes.</p><button>Review decision</button></div><div class="attention-item warning"><span>Waiting</span><strong>Noah waiting for Aiden</strong><p>Metrics work package has exceeded the five-minute follow-up threshold.</p></div><div class="attention-item"><span>Budget</span><strong>Cloud capacity review</strong><p>Finance recommendation is ready for human approval.</p></div></div>
       </section>
       <section class="panel dispatch-panel" id="missionRuntimeActivity"><div class="panel-title"><div><p class="eyebrow">PHASE 2 · RUNTIME CONTROL</p><h2>Mission Runtime Activity</h2></div><div class="dispatch-live-state"><span class="live-dot">Auto-sync 5s</span><b id="dispatchCount">0</b></div></div><p class="dispatch-intro">Remote run status, output, safe-stop controls and human approvals are synchronized into the selected mission war room.</p><div id="dispatchList" class="dispatch-list"></div></section>
-      <section class="panel organization-map-panel" id="organizationMap"><div class="panel-title"><div><p class="eyebrow">LIVE DIGITAL OFFICE</p><h2>Organization Map</h2></div><div class="legend"><span>● Working</span><span>◐ Waiting</span><span>○ Available</span></div></div><div class="organization-map-body"><div class="organization-map-visual"><img src="/static/assets/organization-map.webp" alt="BeezaOffice AI organization command center" loading="eager" /><div class="map-live-badge"><span class="live-dot">Live collaboration</span></div></div><aside class="map-summary"><div><span>Registered workforce</span><strong>12 / 1,000</strong><small>Founding agent roster</small></div><div><span>Active missions</span><strong id="mapMissionCount">0</strong><small>Cross-department execution</small></div><div><span>Runtime slots</span><strong>42 / 200</strong><small>Elastic worker pool</small></div><div><span>Current focus</span><strong>Pilot readiness</strong><small>Signed release → runtime E2E → customer acceptance</small></div></aside></div></section>
+      <section class="panel organization-map-panel" id="organizationMap"><div class="panel-title"><div><p class="eyebrow">LIVE DIGITAL OFFICE</p><h2>Organization Map</h2></div><div class="legend"><span>● Working</span><span>◐ Waiting</span><span>○ Available</span></div></div><div class="organization-map-body"><div class="organization-map-visual"><img src="/static/assets/organization-map.webp" alt="BeezaOffice AI organization command center" loading="eager" /><div class="map-live-badge"><span class="live-dot">Live collaboration</span></div></div><aside class="map-summary"><div><span>Registered workforce</span><strong>12 / 1,000</strong><small>Founding agent roster</small></div><div><span>Active missions</span><strong id="mapMissionCount">0</strong><small>Cross-department execution</small></div><div><span>Runtime slots</span><strong>42 / 200</strong><small>Elastic worker pool</small></div><div><span>Current focus</span><strong>Agent Rooms</strong><small>Personal workspace · Inbox · Work desk · Memory board</small></div></aside></div></section>
       <section class="panel runtime-panel" id="runtimeMesh"><div class="panel-title"><div><p class="eyebrow">AGENT RUNTIME MESH</p><h2>External Agent Platforms</h2></div><div class="runtime-header-state"><span id="runtimeOnline">0 online</span><span>OpenClaw · CherryAgent · Hermes · thClaws</span></div></div><p class="runtime-intro">BeezaOffice remains the command and governance plane. Missions can be dispatched to specialist agents running on any supported platform, while Beeza keeps the mission identity, timeline, approvals, and audit trail.</p><div id="runtimeGrid" class="runtime-grid"></div><div id="runtimeMessage" class="runtime-message">Select a mission, then dispatch it to a configured runtime.</div></section>
       <section class="panel workforce-panel"><div class="panel-title"><div><p class="eyebrow">FOUNDING WORKFORCE</p><h2>Agent Presence</h2></div><div class="legend"><span>● Running</span><span>◐ Waiting</span><span>○ Available</span></div></div><div id="agentGrid" class="agent-grid"></div></section>
     </main>
@@ -69,5 +70,6 @@
   <script src="/static/phase14.js"></script>
   <script src="/static/phase14_brand.js"></script>
   <script src="/static/pilot.js"></script>
+  <script src="/static/agent_rooms.js"></script>
 </body>
 </html>
