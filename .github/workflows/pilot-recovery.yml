@@ -35,7 +35,7 @@ on:
         default: pilot-isolation
         type: string
       confirmation:
-        description: Type RESTORE-VERIFY-0.16.0 to authorize temporary restore tests
+        description: Type RESTORE-VERIFY-0.16.1 to authorize temporary restore tests
         required: true
         type: string
 
@@ -65,7 +65,7 @@ jobs:
 
       - name: Validate protected inputs and secrets
         run: |
-          test "${{ inputs.confirmation }}" = "RESTORE-VERIFY-0.16.0"
+          test "${{ inputs.confirmation }}" = "RESTORE-VERIFY-0.16.1"
           case "$BASE_URL" in https://*) ;; *) echo "Pilot URL must use HTTPS" >&2; exit 1 ;; esac
           test -n "$BEEZA_AUTH_TOKEN"
           test -n "${{ secrets.PILOT_SECONDARY_LICENSE_TOKEN }}"
@@ -83,7 +83,7 @@ jobs:
           printf '%s\n' "${{ secrets.PILOT_SECONDARY_LICENSE_TOKEN }}" > secondary-license.jwt
           chmod 600 secondary-license.jwt
 
-      - name: Verify License and schema state
+      - name: Verify License schema and Agent Rooms state
         run: |
           python - <<'PY'
           import json, os, urllib.request
@@ -98,16 +98,18 @@ jobs:
                   return json.load(response)
           commercial = read("/api/commercial/status")
           schema = read("/api/system/schema")
-          assert commercial["version"] == "0.16.0", commercial
+          rooms = read("/api/agent-rooms/status")
+          assert commercial["version"] == "0.16.1", commercial
           assert commercial["license"]["mode"] == "enforce", commercial
           assert commercial["license"]["valid"] is True, commercial
           assert schema["up_to_date"] is True, schema
-          assert schema["current_revision"] == "20260722_0002", schema
+          assert schema["current_revision"] == "20260722_0003", schema
+          assert rooms["version"] == "0.16.1" and rooms["rooms"] > 0, rooms
           with open("pilot-license-schema.json", "w", encoding="utf-8") as handle:
-              json.dump({"commercial": commercial, "schema": schema}, handle, indent=2, sort_keys=True)
+              json.dump({"commercial": commercial, "schema": schema, "agent_rooms": rooms}, handle, indent=2, sort_keys=True)
           PY
           python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate license_lifecycle --status PASS --source REAL_PILOT --summary "Signed License is active in enforce mode" --report pilot-license-schema.json --artifact-ref github-actions://${{ github.run_id }}/license-schema
-          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate schema_migration --status PASS --source REAL_PILOT --summary "Database is at Alembic revision 20260722_0002 in strict mode" --report pilot-license-schema.json --artifact-ref github-actions://${{ github.run_id }}/license-schema
+          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate schema_migration --status PASS --source REAL_PILOT --summary "Database is at Alembic revision 20260722_0003 with Agent Rooms in strict mode" --report pilot-license-schema.json --artifact-ref github-actions://${{ github.run_id }}/license-schema
 
       - name: Run two-Licensed-Tenant isolation gate
         run: |
@@ -136,8 +138,8 @@ jobs:
           compose_file="$install_dir/compose.yml"
           restore_db="beeza_restore_verify_${RUN_ID}"
           work_dir="$install_dir/recovery-verification/$RUN_ID"
-          dump_file="/tmp/beeza-pilot-restore-${RUN_ID}.dump"
-          env_snapshot="/tmp/beeza-pilot-env-${RUN_ID}"
+          dump_file="/tmp/beeza-agent-rooms-restore-${RUN_ID}.dump"
+          env_snapshot="/tmp/beeza-agent-rooms-env-${RUN_ID}"
           export_report="$HOME/beeza-recovery-${RUN_ID}.json"
           $SUDO install -d -m 700 "$work_dir"
           $SUDO cat "$env_file" > "$env_snapshot"
@@ -164,14 +166,15 @@ jobs:
           compose exec -T postgres createdb -U "$postgres_user" "$restore_db"
           cat "$dump_file" | compose exec -T postgres pg_restore -U "$postgres_user" --dbname="$restore_db" --no-owner --exit-on-error
 
-          live_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$postgres_db" -Atqc "SELECT (SELECT count(*) FROM missions)||':'||(SELECT count(*) FROM enterprise_resource_scopes)||':'||(SELECT count(*) FROM pilot_programs)||':'||(SELECT count(*) FROM pilot_gate_evidence)")"
-          restored_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$restore_db" -Atqc "SELECT (SELECT count(*) FROM missions)||':'||(SELECT count(*) FROM enterprise_resource_scopes)||':'||(SELECT count(*) FROM pilot_programs)||':'||(SELECT count(*) FROM pilot_gate_evidence)")"
+          count_sql="SELECT (SELECT count(*) FROM missions)||':'||(SELECT count(*) FROM enterprise_resource_scopes)||':'||(SELECT count(*) FROM pilot_programs)||':'||(SELECT count(*) FROM pilot_gate_evidence)||':'||(SELECT count(*) FROM agent_rooms)||':'||(SELECT count(*) FROM agent_room_notes)"
+          live_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$postgres_db" -Atqc "$count_sql")"
+          restored_counts="$(compose exec -T postgres psql -U "$postgres_user" -d "$restore_db" -Atqc "$count_sql")"
           test "$live_counts" = "$restored_counts"
 
-          compose run --rm -e DATABASE_URL="$restore_url" beezaoffice alembic -c alembic.ini downgrade 20260721_0001
+          compose run --rm -e DATABASE_URL="$restore_url" beezaoffice alembic -c alembic.ini downgrade 20260722_0002
           compose run --rm -e DATABASE_URL="$restore_url" beezaoffice alembic -c alembic.ini upgrade head
           restored_revision="$(compose run --rm -e DATABASE_URL="$restore_url" beezaoffice python -c "from main import engine; from schema_service import schema_status; print(schema_status(engine)['current_revision'])" | tail -n1)"
-          test "$restored_revision" = "20260722_0002"
+          test "$restored_revision" = "20260722_0003"
 
           printf '{"gate_status":"PASS","live_counts":"%s","restored_counts":"%s","restored_revision":"%s","verification_database":"%s"}\n' \
             "$live_counts" "$restored_counts" "$restored_revision" "$restore_db" \
@@ -187,15 +190,15 @@ jobs:
           ssh -i ~/.ssh/pilot_key -p "$PILOT_PORT" "$PILOT_USER@$PILOT_HOST" \
             "rm -f ~/beeza-recovery-${GITHUB_RUN_ID}.json"
 
-      - name: Record recovery and rollback evidence
+      - name: Record recovery and Agent Room rollback evidence
         run: |
-          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate backup_restore --status PASS --source REAL_PILOT_RECOVERY --summary "PostgreSQL backup restored into an isolated verification database with matching durable counts" --report recovery-report.json --artifact-ref github-actions://${{ github.run_id }}/backup-restore
-          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate upgrade_rollback --status PASS --source REAL_PILOT_RECOVERY --summary "Restored database completed Alembic downgrade and upgrade to revision 20260722_0002" --report recovery-report.json --artifact-ref github-actions://${{ github.run_id }}/upgrade-rollback
+          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate backup_restore --status PASS --source REAL_PILOT_RECOVERY --summary "PostgreSQL backup restored with matching Mission Pilot Agent Room and Note counts" --report recovery-report.json --artifact-ref github-actions://${{ github.run_id }}/backup-restore
+          python tests/pilot_record_gate.py --base-url "$BASE_URL" --token "$BEEZA_AUTH_TOKEN" --tenant "$TENANT_KEY" --pilot-key "$PILOT_KEY" --gate upgrade_rollback --status PASS --source REAL_PILOT_RECOVERY --summary "Restored database completed Agent Room revision rollback and upgrade to 20260722_0003" --report recovery-report.json --artifact-ref github-actions://${{ github.run_id }}/upgrade-rollback
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: beezaoffice-0.16.0-recovery-isolation
+          name: beezaoffice-0.16.1-recovery-isolation
           path: |
             pilot-license-schema.json
             pilot-tenant-isolation-report.json
