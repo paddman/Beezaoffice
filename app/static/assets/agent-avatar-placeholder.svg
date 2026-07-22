@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Agent avatar placeholder</title>
+  <desc id="desc">A neutral BeezaOffice Agent silhouette for replacement with a custom transparent avatar.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1268ff"/>
+      <stop offset="1" stop-color="#dc285c"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#173b69" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <circle cx="512" cy="512" r="470" fill="#f7fbff" stroke="#dce9f7" stroke-width="18"/>
+  <circle cx="512" cy="350" r="172" fill="url(#bg)" opacity=".95" filter="url(#shadow)"/>
+  <path d="M210 880 C245 660 360 560 512 560 C664 560 779 660 814 880Z" fill="#173b69" filter="url(#shadow)"/>
+  <circle cx="447" cy="335" r="18" fill="#ffffff" opacity=".9"/>
+  <circle cx="577" cy="335" r="18" fill="#ffffff" opacity=".9"/>
+  <path d="M445 410 Q512 462 579 410" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity=".85"/>
+  <rect x="290" y="802" width="444" height="88" rx="44" fill="#ffffff" opacity=".94"/>
+  <text x="512" y="858" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#173b69">ADD AGENT ART</text>
+</svg>
