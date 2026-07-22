@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from agent_room_bootstrap import app
+from agent_room_models import AgentRoom, AgentRoomNote
 from commercial_models import (
     BrandProfile,
     CommercialLicense,
@@ -14,7 +16,6 @@ from phase14_app import feature_for_request
 from phase14_release import ReleasePublish
 from phase14_schema import migration_aware_readiness
 from pilot_app import PILOT_GATES
-from pilot_bootstrap import app
 from pilot_models import PilotGateEvidence, PilotProgram
 from pilot_service import DEFAULT_ACCEPTANCE_CRITERIA, evidence_hash
 from release_version import APP_VERSION, RELEASE_CHANNEL, RELEASE_TAG
@@ -37,11 +38,11 @@ def run() -> None:
         provenance_ref="oci://provenance",
     )
 
-    assert APP_VERSION == "0.16.0"
-    assert RELEASE_TAG == "v0.16.0"
+    assert APP_VERSION == "0.16.1"
+    assert RELEASE_TAG == "v0.16.1"
     assert RELEASE_CHANNEL == "pilot"
     assert app.version == APP_VERSION
-    assert expected_revision() == "20260722_0002"
+    assert expected_revision() == "20260722_0003"
     assert callable(schema_status) and callable(migration_aware_readiness)
 
     assert TenantOnboarding.__tablename__ == "commercial_onboarding"
@@ -52,6 +53,8 @@ def run() -> None:
     assert ReleaseManifest.__tablename__ == "commercial_release_manifests"
     assert PilotProgram.__tablename__ == "pilot_programs"
     assert PilotGateEvidence.__tablename__ == "pilot_gate_evidence"
+    assert AgentRoom.__tablename__ == "agent_rooms"
+    assert AgentRoomNote.__tablename__ == "agent_room_notes"
     assert [column.name for column in constraint.columns] == [
         "tenant_key",
         "feature_key",
@@ -69,6 +72,10 @@ def run() -> None:
     assert feature_for_request("POST", "/message:send") == "protocol"
     assert feature_for_request("POST", "/api/enterprise/tenants") == "enterprise"
     assert commercial_feature_for_request("POST", "/api/enterprise/tenants") == "enterprise"
+    assert feature_for_request("POST", "/api/agent-rooms/mira/tasks") == "collaboration"
+    assert feature_for_request("POST", "/api/agent-rooms/mira/messages") == "collaboration"
+    assert feature_for_request("POST", "/api/agent-rooms/mira/notes") == "registry"
+    assert feature_for_request("PATCH", "/api/agent-rooms/mira") == "registry"
     assert feature_for_request("GET", "/api/missions") is None
 
     required_paths = {
@@ -84,6 +91,13 @@ def run() -> None:
         "/api/pilot/programs/{pilot_key}": 1,
         "/api/pilot/programs/{pilot_key}/gates": 1,
         "/api/pilot/programs/{pilot_key}/decision": 1,
+        "/api/agent-rooms/status": 1,
+        "/api/agent-rooms": 1,
+        "/api/agent-rooms/{agent_key}": 2,
+        "/api/agent-rooms/{agent_key}/messages": 1,
+        "/api/agent-rooms/{agent_key}/tasks": 1,
+        "/api/agent-rooms/{agent_key}/notes": 1,
+        "/api/agent-rooms/{agent_key}/notes/{note_key}": 1,
         "/api/system/schema": 1,
         "/health/ready": 1,
         "/metrics": 1,
@@ -105,15 +119,25 @@ def run() -> None:
     assert permission_for_request(
         "POST", "/api/pilot/programs/PILOT-1/decision"
     ) == "pilot:accept"
+    assert permission_for_request("PATCH", "/api/agent-rooms/mira") == "agent-room:write"
+    assert permission_for_request(
+        "POST", "/api/agent-rooms/mira/messages"
+    ) == "agent-room:message"
+    assert permission_for_request(
+        "POST", "/api/agent-rooms/mira/tasks"
+    ) == "agent-room:assign"
     assert {
         "commercial:license:manage",
         "commercial:release:publish",
         "pilot:manage",
         "pilot:evidence",
         "pilot:accept",
+        "agent-room:write",
+        "agent-room:message",
+        "agent-room:assign",
     }.issubset(EXECUTION_ACTIONS)
 
 
 if __name__ == "__main__":
     run()
-    print("BeezaOffice 0.16.0 pilot smoke test passed")
+    print("BeezaOffice 0.16.1 Agent Rooms smoke test passed")
