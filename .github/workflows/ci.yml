@@ -37,7 +37,7 @@ jobs:
           docker compose -f deploy/pilot/compose.yml config >/dev/null
         env:
           BEEZA_IMAGE: ghcr.io/paddman/beezaoffice@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          BEEZA_APP_VERSION: 0.16.0
+          BEEZA_APP_VERSION: 0.16.1
           BEEZA_RELEASE_CHANNEL: pilot
           DATABASE_URL: postgresql+psycopg://beeza:test@postgres:5432/beezaoffice
           REDIS_URL: redis://redis:6379/0
@@ -54,12 +54,12 @@ jobs:
       - name: Validate Alembic revision graph
         run: |
           docker run --rm beezaoffice:test alembic -c alembic.ini heads
-          test "$(docker run --rm beezaoffice:test alembic -c alembic.ini heads | awk '{print $1}')" = "20260722_0002"
+          test "$(docker run --rm beezaoffice:test alembic -c alembic.ini heads | awk '{print $1}')" = "20260722_0003"
 
       - name: Verify signed-license cryptography
         run: docker run --rm beezaoffice:test python phase14_selftest.py
 
-      - name: Smoke-test 0.16.0 Pilot Operations runtime
+      - name: Smoke-test 0.16.1 Agent Rooms runtime
         run: |
           docker run --rm \
             -e PYTHONPATH=/srv/beezaoffice \
@@ -79,9 +79,9 @@ jobs:
 
       - name: Generate SPDX dependency inventory
         run: |
-          docker run --rm beezaoffice:test python -c "import importlib.metadata as m,json; packages=sorted([{'name':d.metadata.get('Name',d.metadata.get('Summary','unknown')),'version':d.version} for d in m.distributions()],key=lambda x:x['name'].lower()); print(json.dumps({'spdxVersion':'SPDX-2.3','dataLicense':'CC0-1.0','SPDXID':'SPDXRef-DOCUMENT','name':'BeezaOffice-0.16.0-Python-Dependencies','documentNamespace':'https://beezaoffice.local/sbom/python/0.16.0','packages':[{'SPDXID':'SPDXRef-Package-'+str(i),'name':p['name'],'versionInfo':p['version'],'downloadLocation':'NOASSERTION','filesAnalyzed':False} for i,p in enumerate(packages)]},indent=2))" > sbom.spdx.json
+          docker run --rm beezaoffice:test python -c "import importlib.metadata as m,json; packages=sorted([{'name':d.metadata.get('Name',d.metadata.get('Summary','unknown')),'version':d.version} for d in m.distributions()],key=lambda x:x['name'].lower()); print(json.dumps({'spdxVersion':'SPDX-2.3','dataLicense':'CC0-1.0','SPDXID':'SPDXRef-DOCUMENT','name':'BeezaOffice-0.16.1-Python-Dependencies','documentNamespace':'https://beezaoffice.local/sbom/python/0.16.1','packages':[{'SPDXID':'SPDXRef-Package-'+str(i),'name':p['name'],'versionInfo':p['version'],'downloadLocation':'NOASSERTION','filesAnalyzed':False} for i,p in enumerate(packages)]},indent=2))" > sbom.spdx.json
 
       - uses: actions/upload-artifact@v4
         with:
-          name: beezaoffice-0.16.0-sbom
+          name: beezaoffice-0.16.1-sbom
           path: sbom.spdx.json
