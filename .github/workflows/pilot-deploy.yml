@@ -72,7 +72,7 @@ jobs:
             || ssh-keygen -F "[$PILOT_HOST]:$PILOT_PORT" -f ~/.ssh/known_hosts >/dev/null
           printf '%s' "${{ secrets.PILOT_ENV_B64 }}" | base64 --decode > pilot.env
           chmod 600 pilot.env
-          grep -q '^BEEZA_APP_VERSION=0.16.0$' pilot.env
+          grep -q '^BEEZA_APP_VERSION=0.16.1$' pilot.env
           grep -q '^BEEZA_RELEASE_CHANNEL=pilot$' pilot.env
           grep -q '^BEEZA_LICENSE_MODE=enforce$' pilot.env
           grep -q '^BEEZA_LICENSE_TOKEN=.' pilot.env
@@ -83,14 +83,14 @@ jobs:
       - name: Upload installer bundle
         run: |
           ssh -i ~/.ssh/pilot_key -p "$PILOT_PORT" "$PILOT_USER@$PILOT_HOST" \
-            'mkdir -p ~/beezaoffice-0.16.0/deploy/install'
+            'mkdir -p ~/beezaoffice-0.16.1/deploy/install'
           scp -i ~/.ssh/pilot_key -P "$PILOT_PORT" \
             deploy/install/install.sh \
             deploy/install/compose.production.yml \
-            "$PILOT_USER@$PILOT_HOST:~/beezaoffice-0.16.0/deploy/install/"
+            "$PILOT_USER@$PILOT_HOST:~/beezaoffice-0.16.1/deploy/install/"
           scp -i ~/.ssh/pilot_key -P "$PILOT_PORT" \
             pilot.env \
-            "$PILOT_USER@$PILOT_HOST:~/beezaoffice-0.16.0/pilot.env"
+            "$PILOT_USER@$PILOT_HOST:~/beezaoffice-0.16.1/pilot.env"
 
       - name: Verify and install signed image on Pilot host
         run: |
@@ -106,17 +106,17 @@ jobs:
           fi
           install_dir=/opt/beezaoffice
           $SUDO install -d -m 700 "$install_dir"
-          $SUDO cp ~/beezaoffice-0.16.0/pilot.env "$install_dir/.env"
+          $SUDO cp ~/beezaoffice-0.16.1/pilot.env "$install_dir/.env"
           $SUDO chmod 600 "$install_dir/.env"
           $SUDO env \
             BEEZA_INSTALL_DIR="$install_dir" \
-            BEEZA_APP_VERSION=0.16.0 \
+            BEEZA_APP_VERSION=0.16.1 \
             BEEZA_RELEASE_CHANNEL=pilot \
             BEEZA_IMAGE="$BEEZA_IMAGE" \
             BEEZA_COSIGN_IDENTITY="$BEEZA_COSIGN_IDENTITY" \
             BEEZA_COSIGN_ISSUER=https://token.actions.githubusercontent.com \
             BEEZA_PUBLIC_URL="$BEEZA_PUBLIC_URL" \
-            sh ~/beezaoffice-0.16.0/deploy/install/install.sh
+            sh ~/beezaoffice-0.16.1/deploy/install/install.sh
           REMOTE
 
       - name: Verify remote readiness and version
@@ -133,7 +133,7 @@ jobs:
                   with urllib.request.urlopen(base + "/api/health", timeout=10) as response:
                       health = json.load(response)
                   assert ready["status"] == "ready", ready
-                  assert health["version"] == "0.16.0", health
+                  assert health["version"] == "0.16.1", health
                   assert health["license_mode"] == "enforce", health
                   print(json.dumps({"ready": ready, "health": health}, indent=2))
                   break
