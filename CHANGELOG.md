@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.16.1 — Agent Rooms Release
+
+Status: source implemented on `main`; room artwork is intentionally mocked with replaceable placeholders.
+
+### Added
+
+- Persistent personal Room for every registered Agent
+- Tenant-scoped `agent_rooms` and `agent_room_notes` tables
+- Alembic revision `20260722_0003`
+- Agent Room directory with Department and Availability filters
+- Interactive room scene using Background, Avatar and Foreground layers
+- Work Desk showing tasks assigned to the Agent
+- Direct Inbox using the existing Collaboration Message bus
+- Meeting list using structured Meeting participation
+- Notes and curated Memory board
+- Unified Activity timeline
+- Evaluation counters and Runtime dispatch visibility
+- Direct room actions:
+  - Message Agent
+  - Assign work and optionally dispatch immediately
+  - Add Note, Memory or Reminder
+  - Customize Room status, theme and assets
+- Generic office and Agent avatar placeholder SVG assets
+- Exact per-Agent asset paths for later artwork replacement
+- Governance permissions and Commercial feature enforcement
+- Agent Room data added to Pilot restore and customer-acceptance checks
+
+### Asset contract
+
+```text
+app/static/assets/agent-rooms/<agent-key>/background.webp
+app/static/assets/agent-rooms/<agent-key>/avatar.webp
+app/static/assets/agent-rooms/<agent-key>/foreground.webp
+```
+
+Recommended sizes:
+
+```text
+background.webp   1920×1080
+avatar.webp       1024×1024 transparent
+foreground.webp   1920×1080 transparent
+```
+
+### Changed
+
+- Application runtime now starts through `agent_room_bootstrap:app`
+- Application version moved to `0.16.1`
+- Pilot and production Compose defaults moved to `0.16.1`
+- Signed installer expects Alembic head `20260722_0003`
+- Pilot integration gate verifies room creation, asset contract and restore persistence
+- Customer acceptance journey includes the Agent Room directory and workspace
+
+### Operational boundaries
+
+- An Agent Room is a persistent control-plane workspace, not a separate Agent process.
+- Direct messages are delivered to the Collaboration inbox; immediate Runtime response depends on the Agent integration.
+- Custom images are not included yet and must be placed at the documented Static paths or configured through Room customization.
+- Room Notes are curated operational context, not an unrestricted autonomous long-term memory system.
+
 ## 0.16.0 — Pilot Operations Release
 
 Status: source implemented on `main`; operational promotion requires real Pilot evidence.
