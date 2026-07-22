@@ -42,21 +42,21 @@ def find_or_create_pilot(
             "runtime_keys": runtimes,
             "acceptance_criteria": {
                 "customer_signoff_required": True,
-                "workflow": "first-customer-journey",
+                "workflow": "first-customer-agent-room-journey",
             },
-            "notes": "Created by the 0.16.0 customer-acceptance runner.",
+            "notes": "Created by the 0.16.1 Agent Rooms customer-acceptance runner.",
         },
     )
     return created
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the BeezaOffice first-customer acceptance journey.")
+    parser = argparse.ArgumentParser(description="Run the BeezaOffice first-customer Agent Rooms journey.")
     parser.add_argument("--base-url", default="http://127.0.0.1:18080")
     parser.add_argument("--token", default="pilot-token")
     parser.add_argument("--tenant", default="tenant:beeza")
     parser.add_argument("--customer-name", default="BeezaOffice Internal Pilot")
-    parser.add_argument("--version", default="0.16.0")
+    parser.add_argument("--version", default="0.16.1")
     parser.add_argument("--runtimes", default="")
     parser.add_argument("--signoff-name", required=True)
     parser.add_argument("--signoff-note", required=True)
@@ -76,7 +76,6 @@ def main() -> None:
     )
     pilot = readiness["pilot"]
     pilot_key = pilot["key"]
-
     checks: list[dict[str, Any]] = []
 
     _, commercial, _ = api(
@@ -107,9 +106,17 @@ def main() -> None:
                 "settings": {"white_label": True, "pilot": True},
             },
         )
-        checks.append({"name": "white-label profile", "status": "PASS", "detail": brand["product_name"]})
+        checks.append(
+            {
+                "name": "white-label profile",
+                "status": "PASS",
+                "detail": brand["product_name"],
+            }
+        )
     except ApiError as exc:
-        checks.append({"name": "white-label profile", "status": "FAIL", "detail": str(exc)})
+        checks.append(
+            {"name": "white-label profile", "status": "FAIL", "detail": str(exc)}
+        )
 
     _, mission, _ = api(
         args.base_url,
@@ -118,10 +125,10 @@ def main() -> None:
         token=args.token,
         tenant=args.tenant,
         payload={
-            "title": "First customer pilot mission",
+            "title": "First customer Agent Rooms mission",
             "objective": (
                 "Create a safe executive pilot brief proving mission creation, Tenant isolation, "
-                "governance and durable retrieval without modifying external systems."
+                "governance, Agent Rooms and durable retrieval without modifying external systems."
             ),
             "priority": "NORMAL",
         },
@@ -141,6 +148,45 @@ def main() -> None:
             "detail": mission_key,
         }
     )
+
+    _, rooms, _ = api(
+        args.base_url,
+        "GET",
+        "/api/agent-rooms",
+        token=args.token,
+        tenant=args.tenant,
+    )
+    room_ok = bool(rooms and rooms[0].get("room") and rooms[0].get("agent"))
+    checks.append(
+        {
+            "name": "Agent Room directory",
+            "status": "PASS" if room_ok else "FAIL",
+            "detail": f"{len(rooms)} rooms",
+        }
+    )
+    room_agent_key = rooms[0]["room"]["agent_key"] if room_ok else ""
+    if room_agent_key:
+        _, room_detail, _ = api(
+            args.base_url,
+            "GET",
+            f"/api/agent-rooms/{room_agent_key}",
+            token=args.token,
+            tenant=args.tenant,
+        )
+        asset_guide = room_detail.get("asset_guide") or {}
+        room_detail_ok = (
+            room_detail.get("room", {}).get("agent_key") == room_agent_key
+            and asset_guide.get("background", "").endswith("background.webp")
+            and isinstance(room_detail.get("tasks"), list)
+            and isinstance(room_detail.get("messages"), list)
+        )
+        checks.append(
+            {
+                "name": "Agent Room workspace",
+                "status": "PASS" if room_detail_ok else "FAIL",
+                "detail": room_detail.get("room", {}).get("title", room_agent_key),
+            }
+        )
 
     _, pilot_readiness, _ = api(
         args.base_url,
@@ -167,6 +213,7 @@ def main() -> None:
         "customer_name": args.customer_name,
         "version": args.version,
         "mission_key": mission_key,
+        "agent_room_key": room_agent_key,
         "signoff": {
             "name": args.signoff_name,
             "note": args.signoff_note,
@@ -174,9 +221,9 @@ def main() -> None:
         },
         "checks": checks,
         "summary": (
-            f"Customer journey accepted by {args.signoff_name}"
+            f"Customer Agent Rooms journey accepted by {args.signoff_name}"
             if not failed
-            else f"Customer journey failed {len(failed)} checks"
+            else f"Customer Agent Rooms journey failed {len(failed)} checks"
         ),
         "completed_at": completed_at,
     }
@@ -199,6 +246,7 @@ def main() -> None:
                 "passed": len(checks) - len(failed),
                 "signoff_name": args.signoff_name,
                 "mission_key": mission_key,
+                "agent_room_key": room_agent_key,
             },
             "artifact_ref": args.artifact_ref or str(output.resolve()),
             "completed_at": completed_at,
