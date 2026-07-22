@@ -8,6 +8,7 @@ from sqlalchemy import JSON, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from main import Base
+from release_version import APP_VERSION
 
 PILOT_STATUSES = {
     "DRAFT",
@@ -84,7 +85,7 @@ class PilotGateEvidence(Base):
 class PilotProgramCreate(BaseModel):
     customer_name: str = Field(min_length=2, max_length=240)
     environment: str = Field(default="pilot", pattern="^(pilot|staging|production)$")
-    target_version: str = Field(default="0.16.0", min_length=3, max_length=40)
+    target_version: str = Field(default=APP_VERSION, min_length=3, max_length=40)
     runtime_keys: list[str] = Field(default_factory=list, max_length=20)
     acceptance_criteria: dict[str, Any] = Field(default_factory=dict)
     notes: str = Field(default="", max_length=10000)
