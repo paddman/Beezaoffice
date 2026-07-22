@@ -1,4 +1,4 @@
-# Example overlay values for the BeezaOffice 0.16.0 Pilot/Commercial runtime.
+# Example overlay values for the BeezaOffice 0.16.1 Agent Rooms Pilot runtime.
 # Replace every CHANGE_ME value, pin the image by digest, and store the license
 # token/public key in an approved external secret manager before production use.
 apiVersion: v1
@@ -20,7 +20,7 @@ metadata:
   name: beezaoffice-commercial
   namespace: beezaoffice
 data:
-  BEEZA_APP_VERSION: "0.16.0"
+  BEEZA_APP_VERSION: "0.16.1"
   BEEZA_RELEASE_CHANNEL: pilot
   BEEZA_SCHEMA_STRICT: "true"
   BEEZA_FORCE_HTTPS: "true"
@@ -30,7 +30,7 @@ data:
   BEEZA_LICENSE_ISSUER: beezaoffice-license
   BEEZA_LICENSE_AUDIENCE: beezaoffice
   BEEZA_LICENSE_ALGORITHMS: EdDSA,RS256,ES256
-  BEEZA_RELEASE_IMAGE: ghcr.io/paddman/beezaoffice:0.16.0
+  BEEZA_RELEASE_IMAGE: ghcr.io/paddman/beezaoffice:0.16.1
 ---
 # Apply these fields to the existing beezaoffice Deployment using Kustomize,
 # Helm or the site's approved GitOps renderer.
