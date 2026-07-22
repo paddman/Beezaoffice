@@ -1,4 +1,4 @@
-name: Pilot Gate 0.16.0
+name: Pilot Gate 0.16.1
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 40
     env:
       BEEZA_IMAGE: beezaoffice:pilot
-      BEEZA_APP_VERSION: 0.16.0
+      BEEZA_APP_VERSION: 0.16.1
       BEEZA_RELEASE_CHANNEL: pilot
       COMPOSE_FILE: deploy/pilot/compose.yml
     steps:
@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build 0.16.0 pilot image
+      - name: Build 0.16.1 Agent Rooms image
         run: docker build -t "$BEEZA_IMAGE" ./app
 
       - name: Generate ephemeral signed Pilot licenses
@@ -58,12 +58,12 @@ jobs:
           docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
             alembic -c alembic.ini upgrade head
           docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
-            python -c "from main import engine; from schema_service import schema_status; s=schema_status(engine); print(s); assert s['up_to_date']; assert s['expected_revision']=='20260722_0002'"
+            python -c "from main import engine; from schema_service import schema_status; s=schema_status(engine); print(s); assert s['up_to_date']; assert s['expected_revision']=='20260722_0003'"
 
       - name: Start migration-strict licensed application
         run: docker compose -f "$COMPOSE_FILE" up -d beezaoffice
 
-      - name: Run licensed Tenant-isolation gate
+      - name: Run licensed Tenant and Agent Room gate
         run: |
           python tests/pilot_gate.py \
             --base-url http://127.0.0.1:18080 \
@@ -76,8 +76,8 @@ jobs:
       - name: Record License Schema and Tenant gates
         run: |
           python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate license_lifecycle --status PASS --source PILOT_GATE --summary "Primary and secondary Ed25519 licenses verified in enforce mode"
-          python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate schema_migration --status PASS --source PILOT_GATE --summary "Alembic revision 20260722_0002 applied in strict mode"
-          python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate tenant_isolation --status PASS --source PILOT_GATE --summary "Two licensed Tenants remained isolated across Mission reads"
+          python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate schema_migration --status PASS --source PILOT_GATE --summary "Alembic revision 20260722_0003 and Agent Room tables applied in strict mode"
+          python tests/pilot_record_gate.py --pilot-key "$PILOT_KEY" --gate tenant_isolation --status PASS --source PILOT_GATE --summary "Two licensed Tenants remained isolated across Mission and Agent Room reads"
 
       - name: Run Runtime adapter E2E contract gate
         run: |
@@ -142,7 +142,7 @@ jobs:
             pg_restore -U beeza --dbname=beezaoffice --no-owner --exit-on-error
           docker compose -f "$COMPOSE_FILE" up -d beezaoffice
 
-      - name: Verify restored Tenant isolation and evidence
+      - name: Verify restored Tenant Agent Rooms and evidence
         run: |
           python tests/pilot_gate.py \
             --base-url http://127.0.0.1:18080 \
@@ -154,14 +154,14 @@ jobs:
             --gate backup_restore \
             --status PASS \
             --source PILOT_GATE \
-            --summary "Destructive PostgreSQL restore preserved schema Tenant isolation and Pilot evidence" \
+            --summary "Destructive PostgreSQL restore preserved schema Tenant isolation Agent Rooms and Pilot evidence" \
             --artifact-ref github-actions://pilot-gate/backup-restore
 
-      - name: Verify upgrade and rollback revision path
+      - name: Verify Agent Room migration rollback path
         run: |
           docker compose -f "$COMPOSE_FILE" stop beezaoffice
           docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
-            alembic -c alembic.ini downgrade 20260721_0001
+            alembic -c alembic.ini downgrade 20260722_0002
           docker compose -f "$COMPOSE_FILE" run --rm beezaoffice \
             alembic -c alembic.ini upgrade head
           docker compose -f "$COMPOSE_FILE" up -d beezaoffice
@@ -175,7 +175,7 @@ jobs:
             --gate upgrade_rollback \
             --status PASS \
             --source PILOT_GATE \
-            --summary "Alembic revision marker rolled back and upgraded without Pilot data loss" \
+            --summary "Agent Room revision marker rolled back to 0002 and upgraded to 0003 without Room data loss" \
             --artifact-ref github-actions://pilot-gate/upgrade-rollback
 
       - name: Capture Pilot readiness
@@ -208,7 +208,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: beezaoffice-0.16.0-pilot-gate
+          name: beezaoffice-0.16.1-pilot-gate
           path: |
             pilot-state.json
             pilot-readiness.json
