@@ -34,7 +34,7 @@ services:
     image: ${BEEZA_IMAGE:-beezaoffice:pilot}
     environment:
       APP_ENV: pilot
-      BEEZA_APP_VERSION: ${BEEZA_APP_VERSION:-0.16.0}
+      BEEZA_APP_VERSION: ${BEEZA_APP_VERSION:-0.16.1}
       BEEZA_RELEASE_CHANNEL: ${BEEZA_RELEASE_CHANNEL:-pilot}
       BEEZA_PILOT_RATE_LIMIT_PER_MINUTE: ${BEEZA_PILOT_RATE_LIMIT_PER_MINUTE:-120000}
       DATABASE_URL: postgresql+psycopg://beeza:${POSTGRES_PASSWORD:-pilot-password}@postgres:5432/beezaoffice
