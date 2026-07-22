@@ -4,31 +4,130 @@
 
 BeezaOffice is the command, governance, evidence and commercial control plane above OpenClaw, CherryAgent, Hermes Agent and thClaws. It turns Agent work into durable Missions, verified outcomes and measurable business value.
 
-Current application version: **0.16.0 — Pilot Operations Release**.
+Current application version: **0.16.1 — Agent Rooms Release**.
 
-## Platform roadmap
+## What BeezaOffice provides
 
-| Phase | Capability |
-|---:|---|
-| 2 | Runtime dispatch, synchronization, remote output, safe stop and approvals |
-| 3 | Durable Runtime Event stream and Mission SSE |
-| 4 | Typed Collaboration Bus, dependencies, mailbox, retry and escalation |
-| 5 | Structured Agent meetings, bounded rounds and human decisions |
-| 6 | Identity, RBAC, clearance, policy, budgets, approvals, kill switch and hash-chained audit |
-| 7 | Agent Registry, Organization Graph, skills, capacity, reliability and delegation |
-| 8 | Intelligent Agent/Runtime/Model routing, cost control, backpressure and failover |
-| 9 | Evidence evaluation, acceptance checks, provenance, replay and quality scoring |
-| 10 | Versioned SOP Builder, approval nodes, verification gates and rollback |
-| 11 | A2A, MCP tools subset, OpenAI-compatible API, signed webhooks and Protocol Events |
-| 12 | Multi-tenant Enterprise Platform, OIDC, scoped API keys, rate limits, backup/DR, SIEM and Kubernetes HA |
-| 13 | Verified-work economics, Executive KPIs, Department scorecards, Agent economics, SLA, billing and Industry Packs |
-| 14 | Tenant onboarding, signed licenses, contract entitlements, quota enforcement, deployment activation, white label, signed releases and production installer |
+| Layer | Capability |
+|---|---|
+| Runtime | Dispatch, synchronization, output, safe stop and approvals |
+| Collaboration | Typed messages, handoffs, dependencies, follow-up and escalation |
+| Meetings | Structured roles, bounded rounds, decisions and action items |
+| Governance | Identity, RBAC, clearance, policies, budgets, approvals, kill switch and audit |
+| Registry | Organization Graph, skills, capacity, reliability and delegation |
+| Scheduler | Explainable Agent/Runtime/Model routing, cost control and failover |
+| Evaluation | Evidence, provenance, acceptance checks, replay and quality scoring |
+| SOP | Versioned executable procedures, verification gates and rollback |
+| Protocol | A2A, MCP subset, OpenAI-compatible API and signed webhooks |
+| Enterprise | Multi-tenancy, OIDC, scoped API keys, rate limits, backup/DR and SIEM |
+| Business | Executive KPIs, Agent economics, SLA, billing and Industry Packs |
+| Commercial | Onboarding, signed licenses, entitlements, quotas, white label and signed releases |
+| Pilot | Evidence-gated deployment, load, security, recovery and customer acceptance |
+| Agent Rooms | Persistent personal workspace for every governed Agent |
 
-The numbered build roadmap ends at Phase 14. Version **0.16.0** adds the operational gate required to move that product into a real Pilot.
+The numbered build roadmap ends at Phase 14. Releases after that improve the product without inventing additional Phase numbers.
 
-## 0.16.0 — Pilot Operations Release
+# 0.16.1 — Agent Rooms
 
-A deployment cannot be promoted merely because the application starts. BeezaOffice records ten required gates:
+Every registered Agent receives a persistent personal Room containing:
+
+```text
+Work Desk
+Direct Inbox
+Meetings
+Notes & curated memory
+Evaluation summary
+Runtime activity
+Replaceable room artwork
+```
+
+An Agent Room is a persistent control-plane workspace, not a separate Runtime process.
+
+## Agent Room API
+
+```text
+GET    /api/agent-rooms/status
+GET    /api/agent-rooms
+GET    /api/agent-rooms/{agent_key}
+PATCH  /api/agent-rooms/{agent_key}
+POST   /api/agent-rooms/{agent_key}/messages
+POST   /api/agent-rooms/{agent_key}/tasks
+POST   /api/agent-rooms/{agent_key}/notes
+DELETE /api/agent-rooms/{agent_key}/notes/{note_key}
+```
+
+## Agent Room actions
+
+- **Message Agent** delivers a real Collaboration Message.
+- **Assign Work** creates a fixed-Agent Collaboration Task and can dispatch immediately through the Agent's preferred Runtime.
+- **Add Note** stores a Tenant-scoped Note, Memory or Reminder.
+- **Customize** changes Room state, theme and visual asset paths.
+
+Room work remains connected to the existing Mission, Runtime Event, Evaluation and Audit systems.
+
+## Mock artwork and replacement paths
+
+Version `0.16.1` includes generic placeholder artwork. Custom images can be added later without changing the Room system.
+
+```text
+app/static/assets/agent-rooms/<agent-key>/background.webp
+app/static/assets/agent-rooms/<agent-key>/avatar.webp
+app/static/assets/agent-rooms/<agent-key>/foreground.webp
+```
+
+Recommended dimensions:
+
+| Layer | Size | Format |
+|---|---:|---|
+| Background | 1920×1080 | WebP |
+| Avatar | 1024×1024 | Transparent WebP or PNG |
+| Foreground | 1920×1080 | Transparent WebP or PNG |
+
+Example:
+
+```text
+app/static/assets/agent-rooms/mira/background.webp
+app/static/assets/agent-rooms/mira/avatar.webp
+app/static/assets/agent-rooms/mira/foreground.webp
+```
+
+Then configure the Room with `/static/...` paths through **Customize Room**.
+
+## Agent Room governance
+
+```text
+agent-room:read
+agent-room:write
+agent-room:message
+agent-room:assign
+```
+
+Commercial boundaries:
+
+- Room configuration and Notes require the `registry` feature.
+- Direct messages and work assignment require the `collaboration` feature.
+- Existing Tenant isolation, License enforcement, Governance and Kill Switch remain authoritative.
+
+## Database migration
+
+Current Alembic head:
+
+```text
+20260722_0003
+```
+
+New tables:
+
+```text
+agent_rooms
+agent_room_notes
+```
+
+The migration downgrade is non-destructive because Room Notes may contain operational memory.
+
+# Pilot Operations
+
+BeezaOffice records ten release gates:
 
 ```text
 release_signed
@@ -45,7 +144,7 @@ customer_acceptance
 
 Production promotion is blocked until every gate is `PASS` and an authorized Executive accepts the Pilot.
 
-### Pilot API
+## Pilot API
 
 ```text
 GET  /api/pilot/checklist
@@ -57,117 +156,61 @@ POST /api/pilot/programs/{pilot_key}/gates
 POST /api/pilot/programs/{pilot_key}/decision
 ```
 
-Pilot evidence stores source, summary, metrics, artifact reference, actor, timestamps and an integrity hash. The UI includes a Pilot Operations Center showing gate completion and promotion state.
+## Pilot workflows
 
-### Acceptance thresholds
-
-Default Pilot criteria:
-
-| Criterion | Default |
-|---|---:|
-| Runtime success rate | 99% |
-| Maximum API error rate | 1% |
-| Maximum p95 latency | 1,500 ms |
-| Minimum security score | 90/100 |
-| Backup/restore test | Required |
-| Human customer sign-off | Required |
-
-### Database migration
-
-Current Alembic head:
-
-```text
-20260722_0002
-```
-
-`BEEZA_SCHEMA_STRICT=true` blocks readiness when the database revision does not match the application.
-
-## Pilot automation
-
-### 1. Automated integration gate
-
-Workflow:
+### Automated integration gate
 
 ```text
 .github/workflows/pilot-gate.yml
 ```
 
-It automatically:
+It builds `0.16.1`, applies Alembic `20260722_0003`, generates signed temporary Licenses for two Tenants, verifies Tenant isolation, creates Agent Rooms, tests four Runtime adapter contracts, runs load/security checks, destroys and restores PostgreSQL, and verifies the Agent Room migration rollback path.
 
-1. Builds the 0.16.0 image.
-2. Generates ephemeral Ed25519 Pilot licenses for two Tenants.
-3. Starts PostgreSQL, Redis and a deterministic four-Runtime simulator.
-4. Applies Alembic migrations in strict mode.
-5. Tests signed License enforcement and Tenant isolation.
-6. Runs OpenClaw, CherryAgent, Hermes and thClaws adapter E2E contracts.
-7. Runs the HTTP security review.
-8. Runs a thresholded load test.
-9. Destroys and restores PostgreSQL, then verifies persistent isolation.
-10. Tests Alembic downgrade/upgrade without Pilot-data loss.
+Simulated Runtime success is not represented as real customer validation.
 
-This workflow intentionally leaves `release_signed` and `customer_acceptance` pending. Simulated Runtime success is not presented as real customer validation.
-
-### 2. Signed remote Pilot deployment
-
-Workflow:
+### Signed remote deployment
 
 ```text
 .github/workflows/pilot-deploy.yml
 ```
 
-Required GitHub Environment: `pilot-production`.
+Required GitHub Environment:
 
-Required secrets:
+```text
+pilot-production
+```
+
+Required deployment secrets:
 
 ```text
 PILOT_SSH_PRIVATE_KEY
+PILOT_SSH_KNOWN_HOSTS
 PILOT_ENV_B64
 ```
 
-The environment file must contain a real signed License, production secrets, Runtime endpoints and:
+The environment must contain:
 
 ```env
-BEEZA_APP_VERSION=0.16.0
+BEEZA_APP_VERSION=0.16.1
 BEEZA_RELEASE_CHANNEL=pilot
 BEEZA_LICENSE_MODE=enforce
 BEEZA_SCHEMA_STRICT=true
 BEEZA_FORCE_HTTPS=true
 ```
 
-The workflow accepts a digest-pinned signed image, verifies the Cosign identity on the Pilot host, runs the migration-aware installer and verifies remote readiness.
+The workflow verifies the digest-pinned signed image, uses pinned SSH trust, runs the migration-aware installer and verifies remote version `0.16.1`.
 
-### 3. Real Runtime and customer validation
-
-Workflow:
+### Real Runtime and customer validation
 
 ```text
 .github/workflows/pilot-promotion.yml
 ```
 
-It runs against the deployed HTTPS Pilot environment and requires:
+Real promotion requires a deployed HTTPS Pilot, signed image digest, real Runtime endpoints, load/security evidence, named customer representative and human acceptance note.
 
-- Pilot URL and Tenant
-- Pilot Program key
-- Real Runtime keys
-- Verified signed RC artifact reference
-- Customer organization
-- Human customer representative and acceptance note
-- `PILOT_AUTH_TOKEN` GitHub Environment secret
+The stable tag is a promotion action after accepted Pilot evidence, not a substitute for it.
 
-The workflow then:
-
-1. Records signed-release evidence.
-2. Probes and dispatches a harmless E2E Mission to each configured real Runtime.
-3. Runs a 50-concurrency, 60-second Pilot load gate.
-4. Runs the production HTTP security review.
-5. Requires all non-customer gates to pass.
-6. Executes the first-customer acceptance journey.
-7. Records human sign-off and accepts the Pilot.
-8. Optionally creates and pushes stable tag `v0.16.0`.
-
-The stable tag is therefore a promotion action after Pilot acceptance, not a substitute for Pilot acceptance.
-
-## Architecture
+# Architecture
 
 ```text
 Enterprise Identity / Scoped API Key
@@ -179,6 +222,8 @@ Governance and Audit
 Mission / Meeting / Collaboration / SOP / Protocol
         ↓
 Agent Registry + Intelligent Scheduler
+        ↓
+Agent Rooms
         ↓
 OpenClaw / CherryAgent / Hermes / thClaws
         ↓
@@ -193,9 +238,9 @@ Pilot Evidence Gates
 Human Acceptance → Stable Release Promotion
 ```
 
-## Commercial licensing
+# Commercial licensing
 
-BeezaOffice accepts asymmetric JWT licenses bound to a Tenant and Deployment ID.
+BeezaOffice accepts asymmetric JWT Licenses bound to a Tenant and Deployment ID.
 
 ```env
 BEEZA_LICENSE_MODE=development
@@ -242,7 +287,7 @@ python deploy/license/verify-license.py \
   --deployment-id deployment:customer-a-primary
 ```
 
-### Contract and License intersection
+## Contract and License limits
 
 | Plan | Agents | Concurrent work | Tenants | Deployments |
 |---|---:|---:|---:|---:|
@@ -252,7 +297,7 @@ python deploy/license/verify-license.py \
 
 Effective features are the intersection of the active Contract and signed License. Effective quotas use the lower positive limit.
 
-## Signed releases
+# Signed releases
 
 `.github/workflows/release.yml` runs for `v*` tags and:
 
@@ -262,9 +307,9 @@ Effective features are the intersection of the active Contract and signed Licens
 4. Verifies the signature.
 5. Produces a Commercial Release Manifest and installer command.
 
-Version 0.16.0 is seeded as `UNSIGNED`. It becomes a stable signed release only after a tag-triggered workflow successfully publishes its immutable artifact.
+Version `0.16.1` is seeded as `UNSIGNED`. It becomes a signed release only after a tag-triggered workflow successfully publishes its immutable artifact.
 
-## Production installer
+# Production installer
 
 ```text
 deploy/install/install.sh
@@ -277,24 +322,24 @@ The installer requires:
 - Digest-pinned image
 - Cosign verification
 - Signed License in `enforce` mode
-- Alembic revision `20260722_0002`
+- Alembic revision `20260722_0003`
 - Pre-migration PostgreSQL backup
 
 Example:
 
 ```bash
-BEEZA_APP_VERSION=0.16.0 \
+BEEZA_APP_VERSION=0.16.1 \
 BEEZA_RELEASE_CHANNEL=pilot \
-BEEZA_IMAGE=ghcr.io/paddman/beezaoffice:0.16.0@sha256:... \
-BEEZA_COSIGN_IDENTITY=https://github.com/paddman/Beezaoffice/.github/workflows/release.yml@refs/tags/v0.16.0-rc.1 \
+BEEZA_IMAGE=ghcr.io/paddman/beezaoffice:0.16.1@sha256:... \
+BEEZA_COSIGN_IDENTITY=https://github.com/paddman/Beezaoffice/.github/workflows/release.yml@refs/tags/v0.16.1-rc.1 \
 BEEZA_LICENSE_PUBLIC_KEY="$(awk '{printf "%s\\n",$0}' beeza-license-public.pem)" \
 BEEZA_LICENSE_TOKEN="$(cat customer-a.jwt)" \
 sh deploy/install/install.sh
 ```
 
-The application binds to `127.0.0.1:8080` by default. External access requires an approved HTTPS reverse proxy or ingress.
+External access requires an approved HTTPS reverse proxy or ingress.
 
-## Local development
+# Local development
 
 ```bash
 cp .env.example .env
@@ -305,79 +350,7 @@ docker compose -f compose.yml logs -f beezaoffice
 
 The example environment uses `BEEZA_LICENSE_MODE=development` and does not represent a production Pilot.
 
-## Core APIs
-
-### Commercial
-
-```text
-GET  /api/commercial/status
-GET  /api/commercial/onboarding
-POST /api/commercial/onboarding
-POST /api/commercial/onboarding/{key}/advance
-GET  /api/commercial/license
-POST /api/commercial/license/import
-POST /api/commercial/license/verify
-GET  /api/commercial/entitlements
-GET  /api/commercial/brand
-PUT  /api/commercial/brand
-GET  /api/commercial/deployments
-POST /api/commercial/deployments
-POST /api/commercial/deployments/{key}/heartbeat
-GET  /api/commercial/releases
-POST /api/commercial/releases/publish
-GET  /api/commercial/installer-config
-```
-
-### Business
-
-```text
-GET  /api/business/status
-POST /api/business/sync
-GET  /api/business/executive
-GET  /api/business/departments
-GET  /api/business/agents
-GET  /api/business/outcomes
-POST /api/business/outcomes
-GET  /api/business/plans
-GET  /api/business/billing
-GET  /api/business/usage
-POST /api/business/subscription
-GET  /api/business/industry-packs
-POST /api/business/industry-packs/{pack_key}/install
-```
-
-### Enterprise
-
-```text
-GET  /api/enterprise/status
-GET  /api/enterprise/tenants
-POST /api/enterprise/tenants
-GET  /api/enterprise/identity-providers
-POST /api/enterprise/identity-providers
-POST /enterprise/sso/oidc/exchange
-GET    /api/enterprise/api-keys
-POST   /api/enterprise/api-keys
-DELETE /api/enterprise/api-keys/{key_id}
-GET  /api/enterprise/backup/plans
-POST /api/enterprise/backup/plans/{plan_key}/runs
-GET  /api/enterprise/siem/export
-```
-
-### Protocol
-
-```text
-GET  /.well-known/agent-card.json
-POST /message:send
-GET  /tasks
-GET  /tasks/{task_id}
-POST /tasks/{task_id}:cancel
-GET  /tasks/{task_id}:subscribe
-POST /mcp
-POST /v1/chat/completions
-POST /hooks/{channel}
-```
-
-## Health and observability
+# Health and observability
 
 ```text
 GET /health/live
@@ -387,35 +360,36 @@ GET /api/system/schema
 GET /metrics     Authorization: Bearer $BEEZA_METRICS_TOKEN
 ```
 
-## Security baseline
+# Security baseline
 
-Version 0.16.0 adds:
+- Protected `/api/*` endpoints require Bearer authentication.
+- Configurable maximum request-body size.
+- HTTPS enforcement option.
+- CSP, frame denial, MIME sniffing protection and no-referrer policy.
+- API `no-store` caching.
+- HSTS when served through HTTPS.
+- Uvicorn Server-header suppression.
+- Signed License, Tenant and Governance enforcement.
+- Agent Room asset paths restricted to `/static/`.
 
-- Configurable maximum request-body size
-- HTTPS enforcement option
-- CSP, frame denial, MIME sniffing protection and no-referrer policy
-- API `no-store` caching policy
-- HSTS when served through HTTPS
-- Uvicorn Server-header suppression
-- Signed License, Tenant and Governance enforcement
+# Current release state
 
-## Current release state
+The source code, APIs, UI, migration, CI configuration and deploy defaults for **0.16.1** are on `main`.
 
-The source code, APIs, workflows and Pilot gates for **0.16.0** are on `main`.
+Source completion does not automatically mean:
 
-Not automatically implied by source-code completion:
-
-- A real Pilot host has been deployed
-- A permanent Customer License has been issued
-- Real OpenClaw/CherryAgent/Hermes/thClaws endpoints have passed E2E
-- A customer representative has signed acceptance
-- Stable tag `v0.16.0` has been pushed
-
-Those states are recorded only after the corresponding workflows and evidence gates complete.
+- A real Pilot host has been deployed.
+- Permanent Customer Licenses have been issued.
+- Real OpenClaw, CherryAgent, Hermes and thClaws endpoints have passed E2E.
+- Customer room artwork has been supplied.
+- A customer representative has accepted the release.
+- Stable tag `v0.16.1` has been pushed.
 
 Detailed documentation:
 
+- `docs/RELEASE-0.16.1-AGENT-ROOMS.md`
+- `docs/RELEASE-0.16.0-PILOT-OPERATIONS.md`
+- `docs/RELEASE-0.16.0-EXECUTION-CHECKLIST.md`
 - `docs/PHASE-12-ENTERPRISE-PLATFORM.md`
 - `docs/PHASE-13-EXECUTIVE-BUSINESS.md`
 - `docs/PHASE-14-COMMERCIAL-PRODUCTIZATION.md`
-- `docs/RELEASE-0.16.0-PILOT-OPERATIONS.md`
