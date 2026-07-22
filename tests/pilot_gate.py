@@ -11,7 +11,8 @@ from typing import Any
 
 DEFAULT_TENANT = "tenant:beeza"
 SECOND_TENANT = "tenant:pilot-b"
-APP_VERSION = "0.16.0"
+APP_VERSION = "0.16.1"
+SCHEMA_REVISION = "20260722_0003"
 
 
 class ApiError(RuntimeError):
@@ -31,27 +32,24 @@ def api(
     token: str = "pilot-token",
 ) -> tuple[int, Any, dict[str, str]]:
     data = json.dumps(payload).encode() if payload is not None else None
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "X-Beeza-Identity": "human:owner",
-        "X-Beeza-Tenant": tenant,
-        "X-Beeza-Risk-Level": "LOW",
-        "Content-Type": "application/json",
-    }
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}{path}",
         method=method,
         data=data,
-        headers=headers,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Beeza-Identity": "human:owner",
+            "X-Beeza-Tenant": tenant,
+            "X-Beeza-Risk-Level": "LOW",
+            "Content-Type": "application/json",
+        },
     )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = response.read().decode()
             body = json.loads(raw) if raw else None
-            response_headers = {
-                key.casefold(): value for key, value in response.headers.items()
-            }
-            return response.status, body, response_headers
+            headers = {key.casefold(): value for key, value in response.headers.items()}
+            return response.status, body, headers
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode()
         try:
@@ -135,38 +133,39 @@ def create_mission(base_url: str, tenant: str, suffix: str) -> str:
 def assert_tenant_isolation(base_url: str, mission_a: str, mission_b: str) -> None:
     _, missions_a, headers_a = api(base_url, "GET", "/api/missions")
     _, missions_b, headers_b = api(
-        base_url,
-        "GET",
-        "/api/missions",
-        tenant=SECOND_TENANT,
+        base_url, "GET", "/api/missions", tenant=SECOND_TENANT
     )
     keys_a = {row["key"] for row in missions_a}
     keys_b = {row["key"] for row in missions_b}
-    assert mission_a in keys_a, (mission_a, keys_a)
-    assert mission_b not in keys_a, (mission_b, keys_a)
-    assert mission_b in keys_b, (mission_b, keys_b)
-    assert mission_a not in keys_b, (mission_a, keys_b)
+    assert mission_a in keys_a and mission_b not in keys_a, (mission_a, mission_b, keys_a)
+    assert mission_b in keys_b and mission_a not in keys_b, (mission_a, mission_b, keys_b)
     assert headers_a.get("x-beeza-tenant") == DEFAULT_TENANT, headers_a
     assert headers_b.get("x-beeza-tenant") == SECOND_TENANT, headers_b
+    for tenant, foreign_key in [
+        (DEFAULT_TENANT, mission_b),
+        (SECOND_TENANT, mission_a),
+    ]:
+        try:
+            api(base_url, "GET", f"/api/missions/{foreign_key}", tenant=tenant)
+        except ApiError as exc:
+            assert exc.status == 404, exc
+        else:
+            raise AssertionError(f"{tenant} read foreign Mission {foreign_key}")
 
-    try:
-        api(base_url, "GET", f"/api/missions/{mission_b}")
-    except ApiError as exc:
-        assert exc.status == 404, exc
-    else:
-        raise AssertionError("Tenant A read Tenant B mission")
 
-    try:
-        api(
-            base_url,
-            "GET",
-            f"/api/missions/{mission_a}",
-            tenant=SECOND_TENANT,
-        )
-    except ApiError as exc:
-        assert exc.status == 404, exc
-    else:
-        raise AssertionError("Tenant B read Tenant A mission")
+def assert_agent_rooms(base_url: str) -> dict[str, Any]:
+    _, status, _ = api(base_url, "GET", "/api/agent-rooms/status")
+    assert status.get("version") == APP_VERSION, status
+    assert status.get("rooms", 0) >= 12, status
+    _, rooms, _ = api(base_url, "GET", "/api/agent-rooms")
+    assert len(rooms) >= 12, rooms
+    first = rooms[0]
+    agent_key = first["room"]["agent_key"]
+    _, detail, _ = api(base_url, "GET", f"/api/agent-rooms/{agent_key}")
+    assert detail["room"]["agent_key"] == agent_key, detail
+    assert detail["room"]["background_asset"].startswith("/static/"), detail
+    assert detail["asset_guide"]["background"].endswith("background.webp"), detail
+    return status
 
 
 def assert_schema(base_url: str) -> dict[str, Any]:
@@ -176,7 +175,7 @@ def assert_schema(base_url: str) -> dict[str, Any]:
     assert schema.get("managed") is True, schema
     assert schema.get("up_to_date") is True, schema
     assert schema.get("current_revision") == schema.get("expected_revision"), schema
-    assert schema.get("expected_revision") == "20260722_0002", schema
+    assert schema.get("expected_revision") == SCHEMA_REVISION, schema
     _, status, _ = api(base_url, "GET", "/api/system/schema")
     assert status.get("up_to_date") is True, status
     return status
@@ -188,7 +187,6 @@ def assert_release_and_pilot(base_url: str, expected_license_mode: str) -> dict[
     assert commercial.get("license", {}).get("mode") == expected_license_mode, commercial
     if expected_license_mode == "enforce":
         assert commercial.get("license", {}).get("valid") is True, commercial
-
     _, pilot, _ = api(base_url, "GET", "/api/pilot/status")
     assert pilot.get("version") == APP_VERSION, pilot
     assert pilot.get("release", {}).get("tag") == f"v{APP_VERSION}", pilot
@@ -208,8 +206,8 @@ def prepare(
     mission_a = create_mission(base_url, DEFAULT_TENANT, "A")
     mission_b = create_mission(base_url, SECOND_TENANT, "B")
     assert_tenant_isolation(base_url, mission_a, mission_b)
+    agent_rooms = assert_agent_rooms(base_url)
     pilot = assert_release_and_pilot(base_url, expected_license_mode)
-
     state = {
         "mission_a": mission_a,
         "mission_b": mission_b,
@@ -217,6 +215,7 @@ def prepare(
         "pilot_key": (pilot.get("current") or {}).get("pilot", {}).get("key"),
         "version": APP_VERSION,
         "license_mode": expected_license_mode,
+        "agent_rooms": agent_rooms.get("rooms", 0),
     }
     state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"gate": "prepare", "status": "passed", **state}, indent=2))
@@ -237,6 +236,7 @@ def verify(base_url: str, state_path: Path, expected_license_mode: str) -> None:
     )
     assert mission_a["key"] == state["mission_a"]
     assert mission_b["key"] == state["mission_b"]
+    assert assert_agent_rooms(base_url).get("rooms", 0) >= state.get("agent_rooms", 0)
     pilot = assert_release_and_pilot(base_url, expected_license_mode)
     assert (pilot.get("current") or {}).get("pilot", {}).get("key") == state["pilot_key"]
     print(json.dumps({"gate": "restore-verify", "status": "passed", **state}, indent=2))
