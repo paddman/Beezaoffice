@@ -34,7 +34,7 @@ on:
         required: true
         type: string
       customer_signoff_name:
-        description: Human customer representative approving the Pilot journey
+        description: Human customer representative approving the Agent Rooms journey
         required: true
         type: string
       customer_signoff_note:
@@ -42,7 +42,7 @@ on:
         required: true
         type: string
       promote_stable_tag:
-        description: Create and push v0.16.0 after Pilot acceptance
+        description: Create and push v0.16.1 after Pilot acceptance
         required: true
         default: false
         type: boolean
@@ -56,6 +56,7 @@ jobs:
     timeout-minutes: 45
     environment: pilot-production
     env:
+      RELEASE_VERSION: 0.16.1
       BASE_URL: ${{ inputs.base_url }}
       TENANT_KEY: ${{ inputs.tenant_key }}
       PILOT_KEY: ${{ inputs.pilot_key }}
@@ -98,59 +99,47 @@ jobs:
             "$SIGNED_IMAGE" \
             > signed-image-verification.json
 
-      - name: Verify deployed version digest License and existing gates
+      - name: Verify deployed Agent Rooms version digest License and gates
         run: |
           python - <<'PY'
           import json, os, urllib.request
-
           base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["RELEASE_VERSION"]
           headers = {
               "Authorization": f"Bearer {os.environ['BEEZA_AUTH_TOKEN']}",
               "X-Beeza-Identity": "human:owner",
               "X-Beeza-Tenant": os.environ["TENANT_KEY"],
           }
-
           def read(path):
               request = urllib.request.Request(base + path, headers=headers)
               with urllib.request.urlopen(request, timeout=30) as response:
                   return json.load(response)
-
           pilot = read(f"/api/pilot/programs/{os.environ['PILOT_KEY']}")
           commercial = read("/api/commercial/status")
+          rooms = read("/api/agent-rooms/status")
           signed_digest = os.environ["SIGNED_IMAGE"].rsplit("@", 1)[1]
-
-          assert pilot["pilot"]["target_version"] == "0.16.0", pilot
+          assert pilot["pilot"]["target_version"] == expected, pilot
           blocked = [gate for gate in pilot["gates"] if gate["status"] in {"FAIL", "BLOCKED"}]
           assert not blocked, blocked
-
-          assert commercial["version"] == "0.16.0", commercial
+          assert commercial["version"] == expected, commercial
           assert commercial["license"]["mode"] == "enforce", commercial
           assert commercial["license"]["valid"] is True, commercial
-          active = [
-              deployment
-              for deployment in commercial.get("deployments", [])
-              if deployment.get("status") == "ACTIVE"
-          ]
+          assert rooms["version"] == expected and rooms["rooms"] > 0, rooms
+          active = [d for d in commercial.get("deployments", []) if d.get("status") == "ACTIVE"]
           matching = [
-              deployment
-              for deployment in active
-              if deployment.get("version") == "0.16.0"
-              and deployment.get("image_digest") == signed_digest
+              d for d in active
+              if d.get("version") == expected and d.get("image_digest") == signed_digest
           ]
-          assert matching, {
-              "expected_digest": signed_digest,
-              "active_deployments": active,
-          }
-
-          evidence = {
-              "pilot": pilot,
-              "commercial": commercial,
-              "signed_image": os.environ["SIGNED_IMAGE"],
-              "cosign_identity": os.environ["COSIGN_IDENTITY"],
-              "matching_deployments": matching,
-          }
+          assert matching, {"expected_digest": signed_digest, "active_deployments": active}
           with open("pilot-before.json", "w", encoding="utf-8") as handle:
-              json.dump(evidence, handle, indent=2, sort_keys=True)
+              json.dump({
+                  "pilot": pilot,
+                  "commercial": commercial,
+                  "agent_rooms": rooms,
+                  "signed_image": os.environ["SIGNED_IMAGE"],
+                  "cosign_identity": os.environ["COSIGN_IDENTITY"],
+                  "matching_deployments": matching,
+              }, handle, indent=2, sort_keys=True)
           PY
 
       - name: Record verified signed RC release
@@ -163,7 +152,7 @@ jobs:
             --gate release_signed \
             --status PASS \
             --source COSIGN_VERIFIED_RC \
-            --summary "Cosign signature verified and deployed 0.16.0 image digest matched the active Deployment" \
+            --summary "Cosign signature verified and deployed 0.16.1 Agent Rooms image digest matched the active Deployment" \
             --report signed-image-verification.json \
             --artifact-ref "$SIGNED_IMAGE"
 
@@ -205,7 +194,7 @@ jobs:
             --base-url "$BASE_URL" \
             --token "$BEEZA_AUTH_TOKEN" \
             --tenant "$TENANT_KEY" \
-            --path /api/missions \
+            --path /api/agent-rooms \
             --concurrency 50 \
             --duration 60 \
             --max-error-rate 0.01 \
@@ -220,7 +209,7 @@ jobs:
             --gate load_test \
             --status PASS \
             --source PILOT_PRODUCTION \
-            --summary "50-concurrency 60-second production Pilot load gate passed" \
+            --summary "50-concurrency 60-second Agent Room directory load gate passed" \
             --report production-load-report.json \
             --artifact-ref github-actions://${{ github.run_id }}/load
 
@@ -239,22 +228,20 @@ jobs:
           with urllib.request.urlopen(request, timeout=30) as response:
               data = json.load(response)
           incomplete = [
-              gate["gate_key"]
-              for gate in data["gates"]
-              if gate["gate_key"] != "customer_acceptance"
-              and gate["status"] != "PASS"
+              gate["gate_key"] for gate in data["gates"]
+              if gate["gate_key"] != "customer_acceptance" and gate["status"] != "PASS"
           ]
           assert not incomplete, f"Incomplete pre-customer gates: {incomplete}"
           PY
 
-      - name: Run first-customer acceptance journey
+      - name: Run first-customer Agent Rooms journey
         run: |
           python tests/pilot_customer_acceptance.py \
             --base-url "$BASE_URL" \
             --token "$BEEZA_AUTH_TOKEN" \
             --tenant "$TENANT_KEY" \
             --customer-name "$CUSTOMER_NAME" \
-            --version 0.16.0 \
+            --version "$RELEASE_VERSION" \
             --runtimes "$RUNTIMES" \
             --signoff-name "$CUSTOMER_SIGNOFF_NAME" \
             --signoff-note "$CUSTOMER_SIGNOFF_NOTE" \
@@ -288,23 +275,24 @@ jobs:
               json.dump(data, handle, indent=2, sort_keys=True)
           PY
 
-      - name: Promote stable v0.16.0 tag
+      - name: Promote stable v0.16.1 tag
         if: ${{ inputs.promote_stable_tag }}
         run: |
           set -eu
+          tag="v${RELEASE_VERSION}"
           git config user.name "BeezaOffice Release Bot"
           git config user.email "release-bot@beezaoffice.local"
-          if git rev-parse "v0.16.0" >/dev/null 2>&1; then
-            test "$(git rev-list -n 1 v0.16.0)" = "$GITHUB_SHA"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            test "$(git rev-list -n 1 "$tag")" = "$GITHUB_SHA"
           else
-            git tag -a v0.16.0 -m "BeezaOffice 0.16.0 Pilot Operations Release"
-            git push origin v0.16.0
+            git tag -a "$tag" -m "BeezaOffice ${RELEASE_VERSION} Agent Rooms Release"
+            git push origin "$tag"
           fi
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: beezaoffice-0.16.0-real-pilot
+          name: beezaoffice-0.16.1-real-pilot
           path: |
             signed-image-verification.json
             pilot-before.json
