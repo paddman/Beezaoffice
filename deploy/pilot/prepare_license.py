@@ -12,6 +12,7 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+APP_VERSION = "0.16.1"
 PLAN_FEATURES = [
     "core.missions",
     "collaboration",
@@ -41,7 +42,9 @@ PLAN_LIMITS = {
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate an ephemeral 0.16.0 pilot license bundle.")
+    parser = argparse.ArgumentParser(
+        description="Generate an ephemeral BeezaOffice 0.16.1 Agent Rooms Pilot license bundle."
+    )
     parser.add_argument("--tenant-key", default="tenant:beeza")
     parser.add_argument("--deployment-id", default="deployment:pilot-gate")
     parser.add_argument("--customer-name", default="BeezaOffice Internal Pilot")
@@ -101,6 +104,8 @@ def main() -> None:
     env_path.write_text(
         "\n".join(
             [
+                f"BEEZA_APP_VERSION={APP_VERSION}",
+                "BEEZA_RELEASE_CHANNEL=pilot",
                 "BEEZA_LICENSE_MODE=enforce",
                 f"BEEZA_DEPLOYMENT_ID={args.deployment_id}",
                 "BEEZA_LICENSE_ISSUER=beezaoffice-license",
@@ -117,6 +122,8 @@ def main() -> None:
     manifest_path.write_text(
         json.dumps(
             {
+                "version": APP_VERSION,
+                "release": "Agent Rooms",
                 "license_key": license_key,
                 "tenant_key": args.tenant_key,
                 "deployment_id": args.deployment_id,
