@@ -54,7 +54,7 @@ def run() -> None:
 
     assert validate_portfolio() == PORTFOLIO_COUNTS
     assert PORTFOLIO_OWNER == "paddman"
-    assert PORTFOLIO_COUNTS == {"repositories": 23, "categories": 8, "departments": 11}
+    assert PORTFOLIO_COUNTS == {"repositories": 23, "categories": 8, "departments": 9}
 
     assert TenantOnboarding.__tablename__ == "commercial_onboarding"
     assert CommercialLicense.__tablename__ == "commercial_licenses"
