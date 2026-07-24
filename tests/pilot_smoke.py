@@ -13,6 +13,7 @@ from commercial_models import (
 from commercial_quota_hardening import commercial_feature_for_request
 from company_blueprint import BLUEPRINT_COUNTS, COMPANY_CHARTER, validate_blueprint
 from governance_service import EXECUTION_ACTIONS, permission_for_request
+from paddman_portfolio_blueprint import PORTFOLIO_COUNTS, PORTFOLIO_OWNER, validate_portfolio
 from phase14_app import feature_for_request
 from phase14_release import ReleasePublish
 from phase14_schema import migration_aware_readiness
@@ -51,6 +52,10 @@ def run() -> None:
     assert COMPANY_CHARTER["name"] == "Beeza AI Company"
     assert COMPANY_CHARTER["operating_system"] == "BeezaOffice"
 
+    assert validate_portfolio() == PORTFOLIO_COUNTS
+    assert PORTFOLIO_OWNER == "paddman"
+    assert PORTFOLIO_COUNTS == {"repositories": 23, "categories": 8, "departments": 11}
+
     assert TenantOnboarding.__tablename__ == "commercial_onboarding"
     assert CommercialLicense.__tablename__ == "commercial_licenses"
     assert FeatureEntitlement.__tablename__ == "commercial_feature_entitlements"
@@ -84,6 +89,7 @@ def run() -> None:
     assert feature_for_request("PATCH", "/api/agent-rooms/mira") == "registry"
     assert feature_for_request("GET", "/api/missions") is None
     assert feature_for_request("GET", "/api/company/status") is None
+    assert feature_for_request("GET", "/api/portfolio/status") is None
 
     required_paths = {
         "/api/commercial/status": 1,
@@ -109,6 +115,11 @@ def run() -> None:
         "/api/company/status": 1,
         "/api/company/reconcile": 1,
         "/api/company/agents": 1,
+        "/api/portfolio/status": 1,
+        "/api/portfolio/repos": 1,
+        "/api/portfolio/repos/{repo_name}": 1,
+        "/api/portfolio/sync": 1,
+        "/api/portfolio/repos/{repo_name}/missions": 1,
         "/api/system/schema": 1,
         "/health/ready": 1,
         "/metrics": 1,
@@ -138,6 +149,10 @@ def run() -> None:
         "POST", "/api/agent-rooms/mira/tasks"
     ) == "agent-room:assign"
     assert permission_for_request("POST", "/api/company/reconcile") == "api:write"
+    assert permission_for_request("POST", "/api/portfolio/sync") == "registry:write"
+    assert permission_for_request(
+        "POST", "/api/portfolio/repos/CherryFlow/missions"
+    ) == "mission:create"
     assert {
         "commercial:license:manage",
         "commercial:release:publish",
@@ -152,4 +167,4 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-    print("BeezaOffice 0.16.1 Agent Rooms and Company bootstrap smoke test passed")
+    print("BeezaOffice 0.16.1 Agent Rooms, Company and paddman Portfolio smoke test passed")
