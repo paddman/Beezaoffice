@@ -11,6 +11,7 @@ from commercial_models import (
     TenantOnboarding,
 )
 from commercial_quota_hardening import commercial_feature_for_request
+from company_blueprint import BLUEPRINT_COUNTS, COMPANY_CHARTER, validate_blueprint
 from governance_service import EXECUTION_ACTIONS, permission_for_request
 from phase14_app import feature_for_request
 from phase14_release import ReleasePublish
@@ -45,6 +46,11 @@ def run() -> None:
     assert expected_revision() == "20260722_0003"
     assert callable(schema_status) and callable(migration_aware_readiness)
 
+    assert validate_blueprint() == BLUEPRINT_COUNTS
+    assert BLUEPRINT_COUNTS == {"departments": 19, "agents": 25, "missions": 3}
+    assert COMPANY_CHARTER["name"] == "Beeza AI Company"
+    assert COMPANY_CHARTER["operating_system"] == "BeezaOffice"
+
     assert TenantOnboarding.__tablename__ == "commercial_onboarding"
     assert CommercialLicense.__tablename__ == "commercial_licenses"
     assert FeatureEntitlement.__tablename__ == "commercial_feature_entitlements"
@@ -77,6 +83,7 @@ def run() -> None:
     assert feature_for_request("POST", "/api/agent-rooms/mira/notes") == "registry"
     assert feature_for_request("PATCH", "/api/agent-rooms/mira") == "registry"
     assert feature_for_request("GET", "/api/missions") is None
+    assert feature_for_request("GET", "/api/company/status") is None
 
     required_paths = {
         "/api/commercial/status": 1,
@@ -98,6 +105,10 @@ def run() -> None:
         "/api/agent-rooms/{agent_key}/tasks": 1,
         "/api/agent-rooms/{agent_key}/notes": 1,
         "/api/agent-rooms/{agent_key}/notes/{note_key}": 1,
+        "/api/company/charter": 1,
+        "/api/company/status": 1,
+        "/api/company/reconcile": 1,
+        "/api/company/agents": 1,
         "/api/system/schema": 1,
         "/health/ready": 1,
         "/metrics": 1,
@@ -126,6 +137,7 @@ def run() -> None:
     assert permission_for_request(
         "POST", "/api/agent-rooms/mira/tasks"
     ) == "agent-room:assign"
+    assert permission_for_request("POST", "/api/company/reconcile") == "api:write"
     assert {
         "commercial:license:manage",
         "commercial:release:publish",
@@ -140,4 +152,4 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-    print("BeezaOffice 0.16.1 Agent Rooms smoke test passed")
+    print("BeezaOffice 0.16.1 Agent Rooms and Company bootstrap smoke test passed")
