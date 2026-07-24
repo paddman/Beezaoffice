@@ -47,7 +47,7 @@ def run() -> None:
     assert callable(schema_status) and callable(migration_aware_readiness)
 
     assert validate_blueprint() == BLUEPRINT_COUNTS
-    assert BLUEPRINT_COUNTS == {"departments": 19, "agents": 25, "missions": 3}
+    assert BLUEPRINT_COUNTS == {"departments": 19, "agents": 26, "missions": 3}
     assert COMPANY_CHARTER["name"] == "Beeza AI Company"
     assert COMPANY_CHARTER["operating_system"] == "BeezaOffice"
 
